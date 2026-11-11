@@ -11,7 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-public class ClanLeaderboardManager {
+public final class ClanLeaderboardManager {
 
     private final DatabaseManager databaseManager;
 
@@ -39,14 +39,18 @@ public class ClanLeaderboardManager {
             int kills
     ) {}
 
-    public List<ClanRank> getTopClans(SortType sortType, int limit) throws SQLException {
+    public List<ClanRank> getTopClans(
+            SortType sortType,
+            int limit
+    ) throws SQLException {
+
         if (sortType == null) {
-            throw new IllegalArgumentException("SortType tidak boleh null!");
+            throw new IllegalArgumentException(
+                    "SortType tidak boleh null!"
+            );
         }
 
-        limit = Math.max(1, Math.min(100, limit));
-
-        String orderBy = getOrderBy(sortType);
+        int safeLimit = Math.max(1, Math.min(100, limit));
 
         String sql = """
                 SELECT id, name, tag, leader_uuid, level, exp, bank,
@@ -54,21 +58,25 @@ public class ClanLeaderboardManager {
                 FROM clans
                 ORDER BY %s
                 LIMIT ?
-                """.formatted(orderBy);
+                """.formatted(getOrderBy(sortType));
 
         List<ClanRank> result = new ArrayList<>();
 
-        Connection connection = databaseManager.getConnection();
+        synchronized (databaseManager.getLock()) {
+            Connection connection = databaseManager.getConnection();
 
-        try (PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.setInt(1, limit);
+            try (PreparedStatement statement =
+                         connection.prepareStatement(sql)) {
 
-            try (ResultSet rs = statement.executeQuery()) {
-                int position = 1;
+                statement.setInt(1, safeLimit);
 
-                while (rs.next()) {
-                    result.add(mapRank(rs, position));
-                    position++;
+                try (ResultSet rs = statement.executeQuery()) {
+                    int position = 1;
+
+                    while (rs.next()) {
+                        result.add(mapRank(rs, position));
+                        position++;
+                    }
                 }
             }
         }
@@ -76,76 +84,112 @@ public class ClanLeaderboardManager {
         return result;
     }
 
-    public ClanRank getClanRank(String clanId, SortType sortType) throws SQLException {
+    public ClanRank getClanRank(
+            String clanId,
+            SortType sortType
+    ) throws SQLException {
+
         if (clanId == null || clanId.isBlank()) {
             return null;
         }
 
         if (sortType == null) {
-            throw new IllegalArgumentException("SortType tidak boleh null!");
+            throw new IllegalArgumentException(
+                    "SortType tidak boleh null!"
+            );
         }
-
-        String orderBy = getOrderBy(sortType);
 
         String sql = """
                 SELECT id, name, tag, leader_uuid, level, exp, bank,
                        wins, losses, kills
                 FROM clans
                 ORDER BY %s
-                """.formatted(orderBy);
+                """.formatted(getOrderBy(sortType));
 
-        Connection connection = databaseManager.getConnection();
+        synchronized (databaseManager.getLock()) {
+            Connection connection = databaseManager.getConnection();
 
-        try (PreparedStatement statement = connection.prepareStatement(sql);
-             ResultSet rs = statement.executeQuery()) {
+            try (PreparedStatement statement =
+                         connection.prepareStatement(sql);
+                 ResultSet rs = statement.executeQuery()) {
 
-            int position = 1;
+                int position = 1;
 
-            while (rs.next()) {
-                String currentId = rs.getString("id");
+                while (rs.next()) {
+                    if (clanId.equals(rs.getString("id"))) {
+                        return mapRank(rs, position);
+                    }
 
-                if (currentId.equals(clanId)) {
-                    return mapRank(rs, position);
+                    position++;
                 }
-
-                position++;
             }
         }
 
         return null;
     }
 
-    public int getClanPosition(String clanId, SortType sortType) throws SQLException {
+    public int getClanPosition(
+            String clanId,
+            SortType sortType
+    ) throws SQLException {
+
         ClanRank rank = getClanRank(clanId, sortType);
 
         return rank == null ? -1 : rank.position();
     }
 
     public int getTotalClans() throws SQLException {
+
         String sql = "SELECT COUNT(*) FROM clans";
 
-        try (PreparedStatement statement =
-                     databaseManager.getConnection().prepareStatement(sql);
-             ResultSet rs = statement.executeQuery()) {
+        synchronized (databaseManager.getLock()) {
+            try (PreparedStatement statement =
+                         databaseManager.getConnection()
+                                 .prepareStatement(sql);
+                 ResultSet rs = statement.executeQuery()) {
 
-            return rs.next() ? rs.getInt(1) : 0;
+                return rs.next() ? rs.getInt(1) : 0;
+            }
         }
     }
 
     private String getOrderBy(SortType sortType) {
         return switch (sortType) {
+
             case LEVEL ->
-                    "level DESC, exp DESC, wins DESC, name COLLATE NOCASE ASC";
+                    """
+                    level DESC,
+                    exp DESC,
+                    wins DESC,
+                    name COLLATE NOCASE ASC,
+                    id ASC
+                    """;
 
             case WINS ->
-                    "wins DESC, level DESC, exp DESC, name COLLATE NOCASE ASC";
+                    """
+                    wins DESC,
+                    level DESC,
+                    exp DESC,
+                    name COLLATE NOCASE ASC,
+                    id ASC
+                    """;
 
             case BANK ->
-                    "bank DESC, level DESC, wins DESC, name COLLATE NOCASE ASC";
+                    """
+                    bank DESC,
+                    level DESC,
+                    wins DESC,
+                    name COLLATE NOCASE ASC,
+                    id ASC
+                    """;
         };
     }
 
-    private ClanRank mapRank(ResultSet rs, int position) throws SQLException {
+    private ClanRank mapRank(
+            ResultSet rs,
+            int position
+    ) throws SQLException {
+
         return new ClanRank(
                 position,
                 rs.getString("id"),

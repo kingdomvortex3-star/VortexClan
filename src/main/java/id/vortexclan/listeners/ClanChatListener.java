@@ -2,19 +2,18 @@
 package id.vortexclan.listeners;
 
 import id.vortexclan.VortexClan;
-import id.vortexclan.clan.Clan;
 import id.vortexclan.clan.ClanChatManager;
 
-import org.bukkit.ChatColor;
+import io.papermc.paper.event.player.AsyncChatEvent;
+
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
+
+import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
-import org.bukkit.event.player.AsyncPlayerChatEvent;
 
-import java.sql.SQLException;
-
-@SuppressWarnings("deprecation")
 public final class ClanChatListener implements Listener {
 
     private final VortexClan plugin;
@@ -28,8 +27,11 @@ public final class ClanChatListener implements Listener {
         this.chatManager = chatManager;
     }
 
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
-    public void onPlayerChat(AsyncPlayerChatEvent event) {
+    @EventHandler(
+            priority = EventPriority.HIGHEST,
+            ignoreCancelled = true
+    )
+    public void onPlayerChat(AsyncChatEvent event) {
         Player player = event.getPlayer();
 
         if (!chatManager.isEnabled(player)) {
@@ -38,41 +40,39 @@ public final class ClanChatListener implements Listener {
 
         event.setCancelled(true);
 
-        String message = event.getMessage();
+        String message = PlainTextComponentSerializer
+                .plainText()
+                .serialize(event.message());
 
-        if (message == null || message.isBlank()) {
+        if (message.isBlank()) {
             return;
         }
 
-        try {
-            Clan clan = plugin.getClanManager()
-                    .getClanByPlayer(player.getUniqueId());
-
-            if (clan == null) {
-                chatManager.disable(player);
-
-                player.sendMessage(color(
-                        "&8[&bVortexClan&8] &cKamu sudah tidak memiliki clan!"
-                ));
-
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            if (!player.isOnline()) {
                 return;
             }
 
-            chatManager.sendMessage(player, message);
+            ClanChatManager.Result result =
+                    chatManager.sendMessage(player, message);
 
-        } catch (SQLException exception) {
-            plugin.getLogger().severe(
-                    "Clan Chat Listener error: "
-                            + exception.getMessage()
-            );
+            switch (result) {
+                case SUCCESS -> {
+                }
 
-            player.sendMessage(color(
-                    "&8[&bVortexClan&8] &cGagal mengirim pesan Clan Chat!"
-            ));
-        }
-    }
+                case NOT_IN_CLAN -> {
+                    chatManager.disable(player);
 
-    private String color(String text) {
-        return ChatColor.translateAlternateColorCodes('&', text);
+                    player.sendMessage(
+                            "§8[§bVortexClan§8] §cKamu sudah tidak memiliki clan!"
+                    );
+                }
+
+                case DATABASE_ERROR ->
+                        player.sendMessage(
+                                "§8[§bVortexClan§8] §cGagal mengirim pesan Clan Chat!"
+                        );
+            }
+        });
     }
 }

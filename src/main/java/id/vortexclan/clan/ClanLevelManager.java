@@ -2,6 +2,7 @@
 package id.vortexclan.clan;
 
 import id.vortexclan.VortexClan;
+import id.vortexclan.database.DatabaseManager;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
@@ -18,9 +19,14 @@ import java.util.logging.Level;
 public final class ClanLevelManager {
 
     private final VortexClan plugin;
+    private final DatabaseManager databaseManager;
 
-    public ClanLevelManager(VortexClan plugin) {
+    public ClanLevelManager(
+            VortexClan plugin,
+            DatabaseManager databaseManager
+    ) {
         this.plugin = plugin;
+        this.databaseManager = databaseManager;
     }
 
     public enum Result {
@@ -43,23 +49,8 @@ public final class ClanLevelManager {
             String clanId,
             long amount
     ) {
-
-        if (amount <= 0) {
-            return new LevelResult(
-                    Result.INVALID_EXP, 0, 0, 0, 0
-            );
-        }
-
-        Connection connection =
-                plugin.getDatabaseManager().getConnection();
-
-        boolean oldAutoCommit;
-
-        try {
-            oldAutoCommit = connection.getAutoCommit();
-        } catch (SQLException exception) {
-            logError("Cannot read transaction state", exception);
-            return failure(Result.DATABASE_ERROR);
+        if (clanId == null || clanId.isBlank() || amount <= 0) {
+            return failure(Result.INVALID_EXP);
         }
 
         int oldLevel;
@@ -67,107 +58,123 @@ public final class ClanLevelManager {
         long totalExp;
         long remainingExp;
 
-        try {
-            connection.setAutoCommit(false);
+        synchronized (databaseManager.getLock()) {
+            Connection connection = databaseManager.getConnection();
+
+            boolean oldAutoCommit;
 
             try {
-                int maxLevel = Math.max(
-                        1,
-                        plugin.getConfig().getInt(
-                                "clan.level.maximum-level", 100
-                        )
-                );
-
-                int expPerLevel = Math.max(
-                        1,
-                        plugin.getConfig().getInt(
-                                "clan.level.exp-per-level", 1000
-                        )
-                );
-
-                try (PreparedStatement statement =
-                             connection.prepareStatement("""
-                        SELECT level, exp
-                        FROM clans
-                        WHERE id = ?
-                        """)) {
-
-                    statement.setString(1, clanId);
-
-                    try (ResultSet result = statement.executeQuery()) {
-                        if (!result.next()) {
-                            connection.rollback();
-
-                            return failure(
-                                    Result.CLAN_NOT_FOUND
-                            );
-                        }
-
-                        oldLevel = result.getInt("level");
-                        totalExp = result.getLong("exp");
-                    }
-                }
-
-                if (oldLevel >= maxLevel) {
-                    connection.rollback();
-
-                    return new LevelResult(
-                            Result.MAX_LEVEL,
-                            oldLevel,
-                            oldLevel,
-                            totalExp,
-                            totalExp
-                    );
-                }
-
-                if (totalExp > Long.MAX_VALUE - amount) {
-                    connection.rollback();
-                    return failure(Result.INVALID_EXP);
-                }
-
-                totalExp += amount;
-
-                newLevel = oldLevel;
-
-                remainingExp = totalExp;
-
-                while (newLevel < maxLevel
-                        && remainingExp >= expPerLevel) {
-
-                    remainingExp -= expPerLevel;
-                    newLevel++;
-                }
-
-                try (PreparedStatement statement =
-                             connection.prepareStatement("""
-                        UPDATE clans
-                        SET level = ?, exp = ?
-                        WHERE id = ?
-                        """)) {
-
-                    statement.setInt(1, newLevel);
-                    statement.setLong(2, remainingExp);
-                    statement.setString(3, clanId);
-
-                    statement.executeUpdate();
-                }
-
-                connection.commit();
-
+                oldAutoCommit = connection.getAutoCommit();
             } catch (SQLException exception) {
-                connection.rollback();
-                throw exception;
+                logError("Cannot read transaction state", exception);
+                return failure(Result.DATABASE_ERROR);
             }
 
-        } catch (SQLException exception) {
-            logError("Failed to add clan EXP", exception);
-            return failure(Result.DATABASE_ERROR);
-
-        } finally {
             try {
-                connection.setAutoCommit(oldAutoCommit);
+                connection.setAutoCommit(false);
+
+                try {
+                    int maxLevel = Math.max(
+                            1,
+                            plugin.getConfig().getInt(
+                                    "clan.level.maximum-level", 100
+                            )
+                    );
+
+                    long expPerLevel = Math.max(
+                            1L,
+                            plugin.getConfig().getLong(
+                                    "clan.level.exp-per-level", 1000
+                            )
+                    );
+
+                    try (PreparedStatement statement =
+                                 connection.prepareStatement("""
+                            SELECT level, exp
+                            FROM clans
+                            WHERE id = ?
+                            """)) {
+
+                        statement.setString(1, clanId);
+
+                        try (ResultSet result = statement.executeQuery()) {
+                            if (!result.next()) {
+                                connection.rollback();
+                                return failure(Result.CLAN_NOT_FOUND);
+                            }
+
+                            oldLevel = result.getInt("level");
+                            totalExp = result.getLong("exp");
+                        }
+                    }
+
+                    if (oldLevel >= maxLevel) {
+                        connection.rollback();
+
+                        return new LevelResult(
+                                Result.MAX_LEVEL,
+                                oldLevel,
+                                oldLevel,
+                                totalExp,
+                                totalExp
+                        );
+                    }
+
+                    if (totalExp < 0
+                            || totalExp > Long.MAX_VALUE - amount) {
+                        connection.rollback();
+                        return failure(Result.INVALID_EXP);
+                    }
+
+                    totalExp += amount;
+                    newLevel = oldLevel;
+                    remainingExp = totalExp;
+
+                    while (newLevel < maxLevel
+                            && remainingExp >= expPerLevel) {
+
+                        remainingExp -= expPerLevel;
+                        newLevel++;
+                    }
+
+                    try (PreparedStatement statement =
+                                 connection.prepareStatement("""
+                            UPDATE clans
+                            SET level = ?, exp = ?
+                            WHERE id = ?
+                            """)) {
+
+                        statement.setInt(1, newLevel);
+                        statement.setLong(2, remainingExp);
+                        statement.setString(3, clanId);
+
+                        if (statement.executeUpdate() == 0) {
+                            throw new SQLException(
+                                    "Failed to update clan level!"
+                            );
+                        }
+                    }
+
+                    connection.commit();
+
+                } catch (SQLException exception) {
+                    connection.rollback();
+                    throw exception;
+                }
+
             } catch (SQLException exception) {
-                logError("Failed to restore transaction state", exception);
+                logError("Failed to add clan EXP", exception);
+                return failure(Result.DATABASE_ERROR);
+
+            } finally {
+                try {
+                    connection.setAutoCommit(oldAutoCommit);
+                } catch (SQLException exception) {
+                    logError(
+                            "Failed to restore transaction state",
+                            exception
+                    );
+                }
             }
         }
 
@@ -187,19 +194,22 @@ public final class ClanLevelManager {
     public synchronized long getExp(String clanId)
             throws SQLException {
 
-        try (PreparedStatement statement =
-                     plugin.getDatabaseManager()
-                             .getConnection()
-                             .prepareStatement("""
-                    SELECT exp FROM clans WHERE id = ?
-                    """)) {
+        synchronized (databaseManager.getLock()) {
+            try (PreparedStatement statement =
+                         databaseManager.getConnection()
+                                 .prepareStatement("""
+                        SELECT exp
+                        FROM clans
+                        WHERE id = ?
+                        """)) {
 
-            statement.setString(1, clanId);
+                statement.setString(1, clanId);
 
-            try (ResultSet result = statement.executeQuery()) {
-                return result.next()
-                        ? result.getLong("exp")
-                        : 0;
+                try (ResultSet result = statement.executeQuery()) {
+                    return result.next()
+                            ? result.getLong("exp")
+                            : 0;
+                }
             }
         }
     }
@@ -207,26 +217,29 @@ public final class ClanLevelManager {
     public synchronized int getLevel(String clanId)
             throws SQLException {
 
-        try (PreparedStatement statement =
-                     plugin.getDatabaseManager()
-                             .getConnection()
-                             .prepareStatement("""
-                    SELECT level FROM clans WHERE id = ?
-                    """)) {
+        synchronized (databaseManager.getLock()) {
+            try (PreparedStatement statement =
+                         databaseManager.getConnection()
+                                 .prepareStatement("""
+                        SELECT level
+                        FROM clans
+                        WHERE id = ?
+                        """)) {
 
-            statement.setString(1, clanId);
+                statement.setString(1, clanId);
 
-            try (ResultSet result = statement.executeQuery()) {
-                return result.next()
-                        ? result.getInt("level")
-                        : 0;
+                try (ResultSet result = statement.executeQuery()) {
+                    return result.next()
+                            ? result.getInt("level")
+                            : 0;
+                }
             }
         }
     }
 
     public long getRequiredExp(int currentLevel) {
         return Math.max(
-                1,
+                1L,
                 plugin.getConfig().getLong(
                         "clan.level.exp-per-level", 1000
                 )
@@ -262,16 +275,32 @@ public final class ClanLevelManager {
     public double getProgress(String clanId)
             throws SQLException {
 
-        long exp = getExp(clanId);
+        synchronized (databaseManager.getLock()) {
+            long exp = getExp(clanId);
+            int level = getLevel(clanId);
 
-        long required = getRequiredExp(
-                getLevel(clanId)
-        );
+            if (level <= 0) {
+                return 0;
+            }
 
-        return Math.min(
-                100.0,
-                Math.max(0.0, exp * 100.0 / required)
-        );
+            int maximumLevel = Math.max(
+                    1,
+                    plugin.getConfig().getInt(
+                            "clan.level.maximum-level", 100
+                    )
+            );
+
+            if (level >= maximumLevel) {
+                return 100.0;
+            }
+
+            long required = getRequiredExp(level);
+
+            return Math.min(
+                    100.0,
+                    Math.max(0.0, exp * 100.0 / required)
+            );
+        }
     }
 
     private void notifyLevelUp(
@@ -279,57 +308,62 @@ public final class ClanLevelManager {
             int oldLevel,
             int newLevel
     ) {
+        List<UUID> members = new ArrayList<>();
 
         try {
-            List<UUID> members = new ArrayList<>();
+            synchronized (databaseManager.getLock()) {
+                try (PreparedStatement statement =
+                             databaseManager.getConnection()
+                                     .prepareStatement("""
+                            SELECT uuid
+                            FROM clan_members
+                            WHERE clan_id = ?
+                            """)) {
 
-            try (PreparedStatement statement =
-                         plugin.getDatabaseManager()
-                                 .getConnection()
-                                 .prepareStatement("""
-                        SELECT uuid
-                        FROM clan_members
-                        WHERE clan_id = ?
-                        """)) {
+                    statement.setString(1, clanId);
 
-                statement.setString(1, clanId);
-
-                try (ResultSet result = statement.executeQuery()) {
-                    while (result.next()) {
-                        members.add(UUID.fromString(
-                                result.getString("uuid")
-                        ));
+                    try (ResultSet result = statement.executeQuery()) {
+                        while (result.next()) {
+                            members.add(UUID.fromString(
+                                    result.getString("uuid")
+                            ));
+                        }
                     }
                 }
             }
 
-            String prefix = plugin.getConfig().getString(
-                    "settings.prefix",
-                    "&8[&bVortexClan&8]"
-            );
-
-            String message = color(
-                    prefix + " &aClan naik level! &b"
-                            + oldLevel + " &7➜ &b"
-                            + newLevel
-            );
-
-            for (UUID uuid : members) {
-                Player player = Bukkit.getPlayer(uuid);
-
-                if (player != null && player.isOnline()) {
-                    player.sendMessage(message);
-                }
-            }
-
         } catch (SQLException exception) {
-            logError("Failed to notify clan level up", exception);
+            logError("Failed to load clan members for notification", exception);
+            return;
+        }
+
+        String prefix = plugin.getConfig().getString(
+                "settings.prefix",
+                "&8[&bVortexClan&8]"
+        );
+
+        String message = color(
+                prefix + " &aClan naik level! &b"
+                        + oldLevel + " &7➜ &b"
+                        + newLevel
+        );
+
+        for (UUID uuid : members) {
+            Player player = Bukkit.getPlayer(uuid);
+
+            if (player != null && player.isOnline()) {
+                player.sendMessage(message);
+            }
         }
     }
 
     private LevelResult failure(Result result) {
         return new LevelResult(
-                result, 0, 0, 0, 0
+                result,
+                0,
+                0,
+                0,
+                0
         );
     }
 

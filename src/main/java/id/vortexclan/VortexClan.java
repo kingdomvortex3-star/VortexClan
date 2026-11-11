@@ -1,7 +1,11 @@
 
 package id.vortexclan;
 
+import id.vortexclan.clan.ClanManager;
+import id.vortexclan.clan.ClanMemberManager;
+import id.vortexclan.commands.ClanCommand;
 import id.vortexclan.database.DatabaseManager;
+import id.vortexclan.economy.VaultManager;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -10,71 +14,56 @@ import java.util.logging.Level;
 public final class VortexClan extends JavaPlugin {
 
     private static VortexClan instance;
+
     private DatabaseManager databaseManager;
+    private VaultManager vaultManager;
+    private ClanManager clanManager;
+    private ClanMemberManager clanMemberManager;
 
     @Override
     public void onEnable() {
         instance = this;
 
-        getLogger().info("=================================");
-        getLogger().info("       VortexClan v1.0.0");
-        getLogger().info("=================================");
-
         saveDefaultConfig();
-
-        if (!checkDependencies()) {
-            getServer().getPluginManager().disablePlugin(this);
-            return;
-        }
 
         try {
             databaseManager = new DatabaseManager(this);
             databaseManager.initialize();
 
-            getLogger().info("SQLite database connected!");
-            getLogger().info("Database tables initialized!");
+            vaultManager = new VaultManager(this);
+            vaultManager.setupEconomy();
+
+            clanManager = new ClanManager(
+                    this,
+                    vaultManager.getEconomy()
+            );
+
+            clanMemberManager = new ClanMemberManager(
+                    this,
+                    clanManager
+            );
+
+            if (getCommand("clan") == null) {
+                throw new IllegalStateException(
+                        "Clan command missing from plugin.yml"
+                );
+            }
+
+            getCommand("clan").setExecutor(
+                    new ClanCommand(this)
+            );
+
+            getLogger().info("VortexClan successfully enabled!");
 
         } catch (Exception exception) {
             getLogger().log(
-                Level.SEVERE,
-                "Failed to initialize database!",
-                exception
+                    Level.SEVERE,
+                    "Failed to enable VortexClan!",
+                    exception
             );
 
-            getServer().getPluginManager().disablePlugin(this);
-            return;
+            Bukkit.getPluginManager().disablePlugin(this);
         }
-
-        getLogger().info("VortexClan successfully enabled!");
-        getLogger().info("=================================");
-    }
-
-    private boolean checkDependencies() {
-        boolean vault = Bukkit.getPluginManager()
-            .getPlugin("Vault") != null;
-
-        boolean placeholderAPI = Bukkit.getPluginManager()
-            .getPlugin("PlaceholderAPI") != null;
-
-        getLogger().info("Checking dependencies...");
-
-        if (vault) {
-            getLogger().info("Vault detected!");
-        } else {
-            getLogger().warning(
-                "Vault not found! Economy features will be unavailable."
-            );
-        }
-
-        if (placeholderAPI) {
-            getLogger().info("PlaceholderAPI detected!");
-        } else {
-            getLogger().warning(
-                "PlaceholderAPI not found! Placeholders will be unavailable."
-            );
-        }
-
-        return true;
     }
 
     @Override
@@ -83,7 +72,6 @@ public final class VortexClan extends JavaPlugin {
             databaseManager.close();
         }
 
-        getLogger().info("VortexClan disabled!");
         instance = null;
     }
 
@@ -93,5 +81,17 @@ public final class VortexClan extends JavaPlugin {
 
     public DatabaseManager getDatabaseManager() {
         return databaseManager;
+    }
+
+    public VaultManager getVaultManager() {
+        return vaultManager;
+    }
+
+    public ClanManager getClanManager() {
+        return clanManager;
+    }
+
+    public ClanMemberManager getClanMemberManager() {
+        return clanMemberManager;
     }
 }

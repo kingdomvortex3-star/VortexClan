@@ -5,6 +5,7 @@ import id.vortexclan.VortexClan;
 import id.vortexclan.clan.Clan;
 import id.vortexclan.clan.ClanManager;
 import id.vortexclan.clan.ClanMemberManager;
+import id.vortexclan.clan.ClanPvPManager;
 import id.vortexclan.clan.ClanLeaderboardManager.SortType;
 
 import org.bukkit.Bukkit;
@@ -135,6 +136,15 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
                 openLeaderboard(player, args);
             }
 
+            case "pvp" -> {
+                if (!(sender instanceof Player player)) {
+                    send(sender, "&cPlayer only!");
+                    return true;
+                }
+
+                toggleClanPvP(player);
+            }
+
             case "reload" -> {
                 if (!sender.hasPermission("vortexclan.admin.reload")) {
                     message(sender, "no-permission");
@@ -149,6 +159,60 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
         }
 
         return true;
+    }
+
+    private void toggleClanPvP(Player player) {
+        ClanPvPManager.Result result =
+                plugin.getClanPvPManager().toggle(
+                        player.getUniqueId().toString()
+                );
+
+        switch (result) {
+            case SUCCESS_ENABLED -> {
+                message(player, "pvp-enabled");
+                notifyClanMembers(player, "&aClan PvP sekarang &2AKTIF&a!");
+            }
+
+            case SUCCESS_DISABLED -> {
+                message(player, "pvp-disabled");
+                notifyClanMembers(player, "&cClan PvP sekarang &4NONAKTIF&c!");
+            }
+
+            case NOT_IN_CLAN ->
+                    message(player, "no-clan");
+
+            case NO_PERMISSION ->
+                    send(player, "&cHanya Leader dan Co-Leader yang bisa mengubah Clan PvP!");
+
+            case DATABASE_ERROR ->
+                    send(player, "&cGagal mengubah status Clan PvP!");
+        }
+    }
+
+    private void notifyClanMembers(Player executor, String text) {
+        try {
+            Clan clan = plugin.getClanManager()
+                    .getClanByPlayer(executor.getUniqueId());
+
+            if (clan == null) {
+                return;
+            }
+
+            for (Player online : Bukkit.getOnlinePlayers()) {
+                Clan memberClan = plugin.getClanManager()
+                        .getClanByPlayer(online.getUniqueId());
+
+                if (memberClan != null
+                        && memberClan.getId().equals(clan.getId())) {
+                    send(online, text);
+                }
+            }
+        } catch (SQLException exception) {
+            plugin.getLogger().severe(
+                    "Gagal mengirim notifikasi Clan PvP: "
+                            + exception.getMessage()
+            );
+        }
     }
 
     private void openLeaderboard(Player player, String[] args) {
@@ -227,6 +291,7 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
             plugin.getLogger().severe(
                     "Create clan error: " + exception.getMessage()
             );
+
             send(player, "&cTerjadi kesalahan saat membuat clan!");
         }
     }
@@ -413,6 +478,7 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
         send(player, "&7Gunakan &b/clan info &7untuk informasi clan.");
         send(player, "&7Gunakan &b/clan create <nama> <tag>");
         send(player, "&7Gunakan &b/clan leaderboard &7untuk melihat ranking.");
+        send(player, "&7Gunakan &b/clan pvp &7untuk toggle Clan PvP.");
         send(player, "&8&m------------------------------");
     }
 
@@ -487,6 +553,7 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
         send(sender, "&b/clan deny &7- Deny invitation");
         send(sender, "&b/clan kick <player> &7- Kick member");
         send(sender, "&b/clan leave &7- Leave clan");
+        send(sender, "&b/clan pvp &7- Toggle Clan PvP");
         send(sender, "&b/clan leaderboard &7- Clan leaderboard");
         send(sender, "&b/clan top <level|wins|bank> &7- Ranking category");
         send(sender, "&b/clan reload &7- Reload config");
@@ -532,6 +599,7 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
             suggestions.add("deny");
             suggestions.add("kick");
             suggestions.add("leave");
+            suggestions.add("pvp");
             suggestions.add("leaderboard");
             suggestions.add("top");
             suggestions.add("reload");

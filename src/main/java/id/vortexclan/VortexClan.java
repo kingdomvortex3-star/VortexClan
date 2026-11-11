@@ -2,6 +2,7 @@
 package id.vortexclan;
 
 import id.vortexclan.clan.ClanBankManager;
+import id.vortexclan.clan.ClanChatManager;
 import id.vortexclan.clan.ClanLeaderboardManager;
 import id.vortexclan.clan.ClanLevelManager;
 import id.vortexclan.clan.ClanManager;
@@ -12,6 +13,7 @@ import id.vortexclan.commands.ClanCommand;
 import id.vortexclan.database.DatabaseManager;
 import id.vortexclan.economy.VaultManager;
 import id.vortexclan.gui.ClanLeaderboardGUI;
+import id.vortexclan.listeners.ClanChatListener;
 import id.vortexclan.listeners.ClanPvPListener;
 
 import org.bukkit.Bukkit;
@@ -32,6 +34,7 @@ public final class VortexClan extends JavaPlugin {
     private ClanLevelManager clanLevelManager;
     private ClanLeaderboardManager clanLeaderboardManager;
     private ClanPvPManager clanPvPManager;
+    private ClanChatManager clanChatManager;
 
     private ClanLeaderboardGUI clanLeaderboardGUI;
 
@@ -50,6 +53,7 @@ public final class VortexClan extends JavaPlugin {
             startTaxTask();
 
             getLogger().info("VortexClan berhasil diaktifkan!");
+
         } catch (Exception exception) {
             getLogger().severe("Gagal mengaktifkan VortexClan!");
             exception.printStackTrace();
@@ -103,6 +107,8 @@ public final class VortexClan extends JavaPlugin {
                 databaseManager
         );
 
+        clanChatManager = new ClanChatManager(this);
+
         clanLeaderboardGUI = new ClanLeaderboardGUI(this);
     }
 
@@ -114,6 +120,11 @@ public final class VortexClan extends JavaPlugin {
 
         Bukkit.getPluginManager().registerEvents(
                 new ClanPvPListener(this),
+                this
+        );
+
+        Bukkit.getPluginManager().registerEvents(
+                new ClanChatListener(this, clanChatManager),
                 this
         );
     }
@@ -151,6 +162,10 @@ public final class VortexClan extends JavaPlugin {
         if (taxTask != null) {
             taxTask.cancel();
             taxTask = null;
+        }
+
+        if (clanChatManager != null) {
+            clanChatManager.clear();
         }
 
         if (databaseManager != null) {
@@ -200,6 +215,10 @@ public final class VortexClan extends JavaPlugin {
 
     public ClanPvPManager getClanPvPManager() {
         return clanPvPManager;
+    }
+
+    public ClanChatManager getClanChatManager() {
+        return clanChatManager;
     }
 
     public ClanLeaderboardGUI getClanLeaderboardGUI() {

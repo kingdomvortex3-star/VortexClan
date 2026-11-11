@@ -6,11 +6,13 @@ import id.vortexclan.clan.ClanLeaderboardManager;
 import id.vortexclan.clan.ClanLevelManager;
 import id.vortexclan.clan.ClanManager;
 import id.vortexclan.clan.ClanMemberManager;
+import id.vortexclan.clan.ClanPvPManager;
 import id.vortexclan.clan.ClanTaxManager;
 import id.vortexclan.commands.ClanCommand;
 import id.vortexclan.database.DatabaseManager;
 import id.vortexclan.economy.VaultManager;
 import id.vortexclan.gui.ClanLeaderboardGUI;
+import id.vortexclan.listeners.ClanPvPListener;
 
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -29,6 +31,7 @@ public final class VortexClan extends JavaPlugin {
     private ClanTaxManager clanTaxManager;
     private ClanLevelManager clanLevelManager;
     private ClanLeaderboardManager clanLeaderboardManager;
+    private ClanPvPManager clanPvPManager;
 
     private ClanLeaderboardGUI clanLeaderboardGUI;
 
@@ -96,12 +99,21 @@ public final class VortexClan extends JavaPlugin {
                 databaseManager
         );
 
+        clanPvPManager = new ClanPvPManager(
+                databaseManager
+        );
+
         clanLeaderboardGUI = new ClanLeaderboardGUI(this);
     }
 
     private void registerListeners() {
         Bukkit.getPluginManager().registerEvents(
                 clanLeaderboardGUI,
+                this
+        );
+
+        Bukkit.getPluginManager().registerEvents(
+                new ClanPvPListener(this),
                 this
         );
     }
@@ -184,6 +196,10 @@ public final class VortexClan extends JavaPlugin {
 
     public ClanLeaderboardManager getClanLeaderboardManager() {
         return clanLeaderboardManager;
+    }
+
+    public ClanPvPManager getClanPvPManager() {
+        return clanPvPManager;
     }
 
     public ClanLeaderboardGUI getClanLeaderboardGUI() {

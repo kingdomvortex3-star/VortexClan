@@ -1,0 +1,51 @@
+
+plugins {
+    id 'java'
+    id 'com.gradleup.shadow' version '9.2.2'
+}
+
+group = 'id.vortexclan'
+version = '1.0.0'
+
+base {
+    archivesName = 'VortexClan'
+}
+
+repositories {
+    mavenCentral()
+
+    maven {
+        name = 'papermc'
+        url = 'https://repo.papermc.io/repository/maven-public/'
+    }
+}
+
+dependencies {
+    compileOnly 'io.papermc.paper:paper-api:26.3-R0.1-SNAPSHOT'
+
+    implementation 'org.xerial:sqlite-jdbc:3.50.3.0'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 25
+}
+
+tasks.shadowJar {
+    archiveClassifier = ''
+
+    relocate(
+        'org.sqlite',
+        'id.vortexclan.libs.sqlite'
+    )
+}
+
+tasks.build {
+    dependsOn tasks.shadowJar
+}

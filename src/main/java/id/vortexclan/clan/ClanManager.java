@@ -2,6 +2,7 @@
 package id.vortexclan.clan;
 
 import id.vortexclan.VortexClan;
+import id.vortexclan.database.DatabaseManager;
 import net.milkbowl.vault.economy.Economy;
 import net.milkbowl.vault.economy.EconomyResponse;
 import org.bukkit.Bukkit;
@@ -17,6 +18,7 @@ import java.util.regex.Pattern;
 public final class ClanManager {
 
     private final VortexClan plugin;
+    private final DatabaseManager databaseManager;
     private final Economy economy;
 
     private static final long DAY_MILLIS = 86400000L;
@@ -40,17 +42,21 @@ public final class ClanManager {
         DATABASE_ERROR
     }
 
-    public ClanManager(VortexClan plugin, Economy economy) {
+    public ClanManager(
+            VortexClan plugin,
+            DatabaseManager databaseManager,
+            Economy economy
+    ) {
         this.plugin = plugin;
+        this.databaseManager = databaseManager;
         this.economy = economy;
     }
 
-    public synchronized CreateResult createClan(
+    public CreateResult createClan(
             UUID playerUUID,
             String name,
             String tag
     ) {
-
         if (!plugin.getConfig().getBoolean(
                 "clan.creation.enabled", true)) {
             return CreateResult.DISABLED;
@@ -95,11 +101,6 @@ public final class ClanManager {
             return CreateResult.INVALID_TAG;
         }
 
-        Connection connection =
-                plugin.getDatabaseManager().getConnection();
-
-        OfflinePlayer player = Bukkit.getOfflinePlayer(playerUUID);
-
         double cost = plugin.getConfig().getDouble(
                 "clan.creation.cost", 1000
         );
@@ -114,145 +115,149 @@ public final class ClanManager {
             return CreateResult.DATABASE_ERROR;
         }
 
-        try {
-            if (getClanByPlayer(playerUUID) != null) {
-                return CreateResult.ALREADY_IN_CLAN;
-            }
+        OfflinePlayer player = Bukkit.getOfflinePlayer(playerUUID);
 
-            if (getClanByName(name) != null) {
-                return CreateResult.NAME_TAKEN;
-            }
-
-            if (getClanByTag(tag) != null) {
-                return CreateResult.TAG_TAKEN;
-            }
-
-        } catch (SQLException exception) {
-            logError("Failed to check clan information", exception);
-            return CreateResult.DATABASE_ERROR;
-        }
-
-        if (!economy.has(player, cost)) {
-            return CreateResult.INSUFFICIENT_MONEY;
-        }
-
-        EconomyResponse payment =
-                economy.withdrawPlayer(player, cost);
-
-        if (!payment.transactionSuccess()) {
-            return CreateResult.INSUFFICIENT_MONEY;
-        }
-
-        UUID clanUUID = UUID.randomUUID();
-
-        long now = System.currentTimeMillis();
-
-        int taxDays = Math.max(
-                1,
-                plugin.getConfig().getInt(
-                        "clan.tax.interval-days", 7
-                )
-        );
-
-        long taxDue = now + (taxDays * DAY_MILLIS);
-
-        boolean oldAutoCommit;
-
-        try {
-            oldAutoCommit = connection.getAutoCommit();
-        } catch (SQLException exception) {
-            refund(player, cost);
-            logError("Failed to access database transaction", exception);
-            return CreateResult.DATABASE_ERROR;
-        }
-
-        boolean committed = false;
-
-        try {
-            connection.setAutoCommit(false);
-
-            try (PreparedStatement statement =
-                         connection.prepareStatement("""
-                    INSERT INTO clans (
-                        id,
-                        name,
-                        tag,
-                        leader_uuid,
-                        description,
-                        level,
-                        exp,
-                        bank,
-                        pvp_enabled,
-                        created_at,
-                        tax_due_at
-                    )
-                    VALUES (?, ?, ?, ?, '', 1, 0, ?, ?, ?, ?)
-                    """)) {
-
-                statement.setString(1, clanUUID.toString());
-                statement.setString(2, name);
-                statement.setString(3, tag);
-                statement.setString(4, playerUUID.toString());
-                statement.setDouble(5, startingBalance);
-
-                statement.setInt(
-                        6,
-                        plugin.getConfig().getBoolean(
-                                "clan.pvp.default", false
-                        ) ? 1 : 0
-                );
-
-                statement.setLong(7, now);
-                statement.setLong(8, taxDue);
-
-                statement.executeUpdate();
-            }
-
-            try (PreparedStatement statement =
-                         connection.prepareStatement("""
-                    INSERT INTO clan_members (
-                        uuid,
-                        clan_id,
-                        role,
-                        joined_at
-                    )
-                    VALUES (?, ?, 'LEADER', ?)
-                    """)) {
-
-                statement.setString(1, playerUUID.toString());
-                statement.setString(2, clanUUID.toString());
-                statement.setLong(3, now);
-
-                statement.executeUpdate();
-            }
-
-            connection.commit();
-            committed = true;
-
-            return CreateResult.SUCCESS;
-
-        } catch (SQLException exception) {
+        synchronized (databaseManager.getLock()) {
+            Connection connection = databaseManager.getConnection();
 
             try {
-                connection.rollback();
-            } catch (SQLException rollbackException) {
-                exception.addSuppressed(rollbackException);
-            }
+                if (getClanByPlayer(playerUUID) != null) {
+                    return CreateResult.ALREADY_IN_CLAN;
+                }
 
-            logError("Failed to create clan", exception);
+                if (getClanByName(name) != null) {
+                    return CreateResult.NAME_TAKEN;
+                }
 
-            return CreateResult.DATABASE_ERROR;
+                if (getClanByTag(tag) != null) {
+                    return CreateResult.TAG_TAKEN;
+                }
 
-        } finally {
-
-            try {
-                connection.setAutoCommit(oldAutoCommit);
             } catch (SQLException exception) {
-                logError("Failed to restore database state", exception);
+                logError("Failed to check clan information", exception);
+                return CreateResult.DATABASE_ERROR;
             }
 
-            if (!committed) {
+            if (!economy.has(player, cost)) {
+                return CreateResult.INSUFFICIENT_MONEY;
+            }
+
+            EconomyResponse payment =
+                    economy.withdrawPlayer(player, cost);
+
+            if (!payment.transactionSuccess()) {
+                return CreateResult.INSUFFICIENT_MONEY;
+            }
+
+            UUID clanUUID = UUID.randomUUID();
+
+            long now = System.currentTimeMillis();
+
+            int taxDays = Math.max(
+                    1,
+                    plugin.getConfig().getInt(
+                            "clan.tax.interval-days", 7
+                    )
+            );
+
+            long taxDue = now + (taxDays * DAY_MILLIS);
+
+            boolean oldAutoCommit;
+
+            try {
+                oldAutoCommit = connection.getAutoCommit();
+            } catch (SQLException exception) {
                 refund(player, cost);
+                logError("Failed to access database transaction", exception);
+                return CreateResult.DATABASE_ERROR;
+            }
+
+            boolean committed = false;
+
+            try {
+                connection.setAutoCommit(false);
+
+                try (PreparedStatement statement =
+                             connection.prepareStatement("""
+                        INSERT INTO clans (
+                            id,
+                            name,
+                            tag,
+                            leader_uuid,
+                            description,
+                            level,
+                            exp,
+                            bank,
+                            pvp_enabled,
+                            created_at,
+                            tax_due_at
+                        )
+                        VALUES (?, ?, ?, ?, '', 1, 0, ?, ?, ?, ?)
+                        """)) {
+
+                    statement.setString(1, clanUUID.toString());
+                    statement.setString(2, name);
+                    statement.setString(3, tag);
+                    statement.setString(4, playerUUID.toString());
+                    statement.setDouble(5, startingBalance);
+
+                    statement.setInt(
+                            6,
+                            plugin.getConfig().getBoolean(
+                                    "clan.pvp.default", false
+                            ) ? 1 : 0
+                    );
+
+                    statement.setLong(7, now);
+                    statement.setLong(8, taxDue);
+
+                    statement.executeUpdate();
+                }
+
+                try (PreparedStatement statement =
+                             connection.prepareStatement("""
+                        INSERT INTO clan_members (
+                            uuid,
+                            clan_id,
+                            role,
+                            joined_at
+                        )
+                        VALUES (?, ?, 'LEADER', ?)
+                        """)) {
+
+                    statement.setString(1, playerUUID.toString());
+                    statement.setString(2, clanUUID.toString());
+                    statement.setLong(3, now);
+
+                    statement.executeUpdate();
+                }
+
+                connection.commit();
+                committed = true;
+
+                return CreateResult.SUCCESS;
+
+            } catch (SQLException exception) {
+                try {
+                    connection.rollback();
+                } catch (SQLException rollbackException) {
+                    exception.addSuppressed(rollbackException);
+                }
+
+                logError("Failed to create clan", exception);
+
+                return CreateResult.DATABASE_ERROR;
+
+            } finally {
+                try {
+                    connection.setAutoCommit(oldAutoCommit);
+                } catch (SQLException exception) {
+                    logError("Failed to restore database state", exception);
+                }
+
+                if (!committed) {
+                    refund(player, cost);
+                }
             }
         }
     }
@@ -272,29 +277,30 @@ public final class ClanManager {
     public Clan getClanByPlayer(UUID playerUUID)
             throws SQLException {
 
-        String sql = """
-                SELECT c.*
-                FROM clans c
-                INNER JOIN clan_members m
-                ON c.id = m.clan_id
-                WHERE m.uuid = ?
-                """;
+        synchronized (databaseManager.getLock()) {
+            String sql = """
+                    SELECT c.*
+                    FROM clans c
+                    INNER JOIN clan_members m
+                    ON c.id = m.clan_id
+                    WHERE m.uuid = ?
+                    """;
 
-        try (PreparedStatement statement =
-                     plugin.getDatabaseManager()
-                             .getConnection()
-                             .prepareStatement(sql)) {
+            try (PreparedStatement statement =
+                         databaseManager.getConnection()
+                                 .prepareStatement(sql)) {
 
-            statement.setString(1, playerUUID.toString());
+                statement.setString(1, playerUUID.toString());
 
-            try (ResultSet result = statement.executeQuery()) {
-                if (result.next()) {
-                    return mapClan(result);
+                try (ResultSet result = statement.executeQuery()) {
+                    if (result.next()) {
+                        return mapClan(result);
+                    }
                 }
             }
-        }
 
-        return null;
+            return null;
+        }
     }
 
     public Clan getClanById(String clanId)
@@ -327,21 +333,22 @@ public final class ClanManager {
     private Clan findClan(String sql, String value)
             throws SQLException {
 
-        try (PreparedStatement statement =
-                     plugin.getDatabaseManager()
-                             .getConnection()
-                             .prepareStatement(sql)) {
+        synchronized (databaseManager.getLock()) {
+            try (PreparedStatement statement =
+                         databaseManager.getConnection()
+                                 .prepareStatement(sql)) {
 
-            statement.setString(1, value);
+                statement.setString(1, value);
 
-            try (ResultSet result = statement.executeQuery()) {
-                if (result.next()) {
-                    return mapClan(result);
+                try (ResultSet result = statement.executeQuery()) {
+                    if (result.next()) {
+                        return mapClan(result);
+                    }
                 }
             }
-        }
 
-        return null;
+            return null;
+        }
     }
 
     private Clan mapClan(ResultSet result)
@@ -368,27 +375,27 @@ public final class ClanManager {
     public int getMemberCount(String clanId)
             throws SQLException {
 
-        String sql = """
-                SELECT COUNT(*)
-                FROM clan_members
-                WHERE clan_id = ?
-                """;
+        synchronized (databaseManager.getLock()) {
+            String sql = """
+                    SELECT COUNT(*)
+                    FROM clan_members
+                    WHERE clan_id = ?
+                    """;
 
-        try (PreparedStatement statement =
-                     plugin.getDatabaseManager()
-                             .getConnection()
-                             .prepareStatement(sql)) {
+            try (PreparedStatement statement =
+                         databaseManager.getConnection()
+                                 .prepareStatement(sql)) {
 
-            statement.setString(1, clanId);
+                statement.setString(1, clanId);
 
-            try (ResultSet result = statement.executeQuery()) {
-                return result.next() ? result.getInt(1) : 0;
+                try (ResultSet result = statement.executeQuery()) {
+                    return result.next() ? result.getInt(1) : 0;
+                }
             }
         }
     }
 
     public int getCapacity(int level) {
-
         int base = plugin.getConfig().getInt(
                 "clan.capacity.default", 5
         );
@@ -414,32 +421,35 @@ public final class ClanManager {
     public boolean isLeader(UUID playerUUID, String clanId)
             throws SQLException {
 
-        Clan clan = getClanById(clanId);
+        synchronized (databaseManager.getLock()) {
+            Clan clan = getClanById(clanId);
 
-        return clan != null
-                && clan.getLeader().equals(playerUUID);
+            return clan != null
+                    && clan.getLeader().equals(playerUUID);
+        }
     }
 
     public String getMemberRole(UUID playerUUID)
             throws SQLException {
 
-        String sql = """
-                SELECT role
-                FROM clan_members
-                WHERE uuid = ?
-                """;
+        synchronized (databaseManager.getLock()) {
+            String sql = """
+                    SELECT role
+                    FROM clan_members
+                    WHERE uuid = ?
+                    """;
 
-        try (PreparedStatement statement =
-                     plugin.getDatabaseManager()
-                             .getConnection()
-                             .prepareStatement(sql)) {
+            try (PreparedStatement statement =
+                         databaseManager.getConnection()
+                                 .prepareStatement(sql)) {
 
-            statement.setString(1, playerUUID.toString());
+                statement.setString(1, playerUUID.toString());
 
-            try (ResultSet result = statement.executeQuery()) {
-                return result.next()
-                        ? result.getString("role")
-                        : null;
+                try (ResultSet result = statement.executeQuery()) {
+                    return result.next()
+                            ? result.getString("role")
+                            : null;
+                }
             }
         }
     }

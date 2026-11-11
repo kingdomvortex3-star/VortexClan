@@ -17,6 +17,10 @@ commands:
     aliases:
       - c
 
+  cc:
+    description: Clan Chat shortcut
+    usage: /cc <message>
+
 permissions:
   vortexclan.use:
     default: true

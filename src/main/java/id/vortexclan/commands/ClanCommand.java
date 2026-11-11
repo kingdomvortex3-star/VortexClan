@@ -6,6 +6,7 @@ import id.vortexclan.clan.Clan;
 import id.vortexclan.clan.ClanManager;
 import id.vortexclan.clan.ClanMemberManager;
 import id.vortexclan.clan.ClanPvPManager;
+import id.vortexclan.clan.ClanChatManager;
 import id.vortexclan.clan.ClanLeaderboardManager.SortType;
 
 import org.bukkit.Bukkit;
@@ -36,6 +37,21 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
             String label,
             String[] args
     ) {
+        if (command.getName().equalsIgnoreCase("cc")) {
+            if (!(sender instanceof Player player)) {
+                send(sender, "&cPlayer only!");
+                return true;
+            }
+
+            if (args.length == 0) {
+                send(player, "&cGunakan: /cc <pesan>");
+                return true;
+            }
+
+            sendClanMessage(player, String.join(" ", args));
+            return true;
+        }
+
         if (args.length == 0) {
             if (!(sender instanceof Player player)) {
                 send(sender, "&cCommand ini hanya bisa digunakan oleh player!");
@@ -145,6 +161,22 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
                 toggleClanPvP(player);
             }
 
+            case "chat" -> {
+                if (!(sender instanceof Player player)) {
+                    send(sender, "&cPlayer only!");
+                    return true;
+                }
+
+                if (args.length == 1) {
+                    toggleClanChat(player);
+                } else {
+                    sendClanMessage(
+                            player,
+                            String.join(" ", java.util.Arrays.copyOfRange(args, 1, args.length))
+                    );
+                }
+            }
+
             case "reload" -> {
                 if (!sender.hasPermission("vortexclan.admin.reload")) {
                     message(sender, "no-permission");
@@ -159,6 +191,38 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
         }
 
         return true;
+    }
+
+    private void toggleClanChat(Player player) {
+        ClanChatManager.Result result =
+                plugin.getClanChatManager().toggle(player);
+
+        if (result == ClanChatManager.Result.NOT_IN_CLAN) {
+            message(player, "no-clan");
+        } else if (result == ClanChatManager.Result.DATABASE_ERROR) {
+            send(player, "&cGagal memeriksa data clan!");
+        }
+    }
+
+    private void sendClanMessage(Player player, String text) {
+        if (text == null || text.isBlank()) {
+            send(player, "&cPesan tidak boleh kosong!");
+            return;
+        }
+
+        ClanChatManager.Result result =
+                plugin.getClanChatManager().sendMessage(player, text);
+
+        switch (result) {
+            case SUCCESS -> {
+            }
+
+            case NOT_IN_CLAN ->
+                    message(player, "no-clan");
+
+            case DATABASE_ERROR ->
+                    send(player, "&cGagal mengirim pesan Clan Chat!");
+        }
     }
 
     private void toggleClanPvP(Player player) {
@@ -461,8 +525,11 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
 
         if (result == ClanMemberManager.Result.SUCCESS) {
             send(player, "&aKamu berhasil keluar dari clan!");
+            plugin.getClanChatManager().disable(player);
+
             notifyClan(clan, "&c" + player.getName()
                     + " &7telah keluar dari clan!");
+
         } else if (result ==
                 ClanMemberManager.Result.LEADER_CANNOT_LEAVE) {
             send(player, "&cLeader tidak bisa keluar begitu saja!");
@@ -470,16 +537,6 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
         } else {
             send(player, "&cGagal keluar dari clan!");
         }
-    }
-
-    private void showMainInfo(Player player) {
-        send(player, "&8&m------------------------------");
-        send(player, "&b&lVORTEX CLAN");
-        send(player, "&7Gunakan &b/clan info &7untuk informasi clan.");
-        send(player, "&7Gunakan &b/clan create <nama> <tag>");
-        send(player, "&7Gunakan &b/clan leaderboard &7untuk melihat ranking.");
-        send(player, "&7Gunakan &b/clan pvp &7untuk toggle Clan PvP.");
-        send(player, "&8&m------------------------------");
     }
 
     private void showClanInfo(Player player) {
@@ -518,12 +575,27 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
                     + plugin.getVaultManager().format(clan.getBank()));
             send(player, "&7PvP: "
                     + (clan.isPvpEnabled() ? "&aON" : "&cOFF"));
+            send(player, "&7Clan Chat: "
+                    + (plugin.getClanChatManager().isEnabled(player)
+                    ? "&aON" : "&cOFF"));
             send(player, "&8&m------------------------------");
 
         } catch (SQLException exception) {
             plugin.getLogger().severe(exception.getMessage());
             send(player, "&cGagal mengambil informasi clan!");
         }
+    }
+
+    private void showMainInfo(Player player) {
+        send(player, "&8&m------------------------------");
+        send(player, "&b&lVORTEX CLAN");
+        send(player, "&7/clan info &8- &fInformasi clan");
+        send(player, "&7/clan create <nama> <tag> &8- &fBuat clan");
+        send(player, "&7/clan leaderboard &8- &fRanking clan");
+        send(player, "&7/clan pvp &8- &fToggle Clan PvP");
+        send(player, "&7/clan chat &8- &fToggle Clan Chat");
+        send(player, "&7/cc <pesan> &8- &fKirim pesan clan");
+        send(player, "&8&m------------------------------");
     }
 
     private void notifyClan(Clan clan, String text) {
@@ -554,6 +626,9 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
         send(sender, "&b/clan kick <player> &7- Kick member");
         send(sender, "&b/clan leave &7- Leave clan");
         send(sender, "&b/clan pvp &7- Toggle Clan PvP");
+        send(sender, "&b/clan chat &7- Toggle Clan Chat");
+        send(sender, "&b/clan chat <pesan> &7- Kirim pesan clan");
+        send(sender, "&b/cc <pesan> &7- Shortcut Clan Chat");
         send(sender, "&b/clan leaderboard &7- Clan leaderboard");
         send(sender, "&b/clan top <level|wins|bank> &7- Ranking category");
         send(sender, "&b/clan reload &7- Reload config");
@@ -591,6 +666,10 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
     ) {
         List<String> suggestions = new ArrayList<>();
 
+        if (command.getName().equalsIgnoreCase("cc")) {
+            return suggestions;
+        }
+
         if (args.length == 1) {
             suggestions.add("create");
             suggestions.add("info");
@@ -600,6 +679,7 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
             suggestions.add("kick");
             suggestions.add("leave");
             suggestions.add("pvp");
+            suggestions.add("chat");
             suggestions.add("leaderboard");
             suggestions.add("top");
             suggestions.add("reload");

@@ -8,15 +8,16 @@ import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 
 import java.sql.SQLException;
-import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class ClanChatManager {
 
     private final VortexClan plugin;
 
-    private final Set<UUID> chatMode = new HashSet<>();
+    private final Set<UUID> chatMode =
+            ConcurrentHashMap.newKeySet();
 
     public ClanChatManager(VortexClan plugin) {
         this.plugin = plugin;
@@ -29,39 +30,77 @@ public final class ClanChatManager {
     }
 
     public Result toggle(Player player) {
-        if (!isClanMember(player)) {
-            return Result.NOT_IN_CLAN;
+        if (!Bukkit.isPrimaryThread()) {
+            return Result.DATABASE_ERROR;
         }
 
-        UUID uuid = player.getUniqueId();
+        try {
+            Clan clan = plugin.getClanManager()
+                    .getClanByPlayer(player.getUniqueId());
 
-        if (chatMode.contains(uuid)) {
-            chatMode.remove(uuid);
-            player.sendMessage(color(
-                    "&8[&bVortexClan&8] &cClan Chat dinonaktifkan!"
-            ));
-        } else {
-            chatMode.add(uuid);
-            player.sendMessage(color(
-                    "&8[&bVortexClan&8] &aClan Chat diaktifkan!"
-            ));
-            player.sendMessage(color(
-                    "&7Pesan kamu sekarang dikirim ke anggota clan."
-            ));
+            if (clan == null) {
+                chatMode.remove(player.getUniqueId());
+                return Result.NOT_IN_CLAN;
+            }
+
+            UUID uuid = player.getUniqueId();
+
+            if (chatMode.remove(uuid)) {
+                player.sendMessage(color(
+                        "&8[&bVortexClan&8] &cClan Chat dinonaktifkan!"
+                ));
+            } else {
+                chatMode.add(uuid);
+
+                player.sendMessage(color(
+                        "&8[&bVortexClan&8] &aClan Chat diaktifkan!"
+                ));
+
+                player.sendMessage(color(
+                        "&7Pesan kamu sekarang dikirim ke anggota clan."
+                ));
+            }
+
+            return Result.SUCCESS;
+
+        } catch (SQLException exception) {
+            plugin.getLogger().severe(
+                    "Clan Chat toggle error: " + exception.getMessage()
+            );
+
+            return Result.DATABASE_ERROR;
         }
-
-        return Result.SUCCESS;
     }
 
     public boolean isEnabled(Player player) {
         return chatMode.contains(player.getUniqueId());
     }
 
+    public boolean isEnabled(UUID uuid) {
+        return chatMode.contains(uuid);
+    }
+
     public void disable(Player player) {
-        chatMode.remove(player.getUniqueId());
+        if (player != null) {
+            chatMode.remove(player.getUniqueId());
+        }
+    }
+
+    public void disable(UUID uuid) {
+        if (uuid != null) {
+            chatMode.remove(uuid);
+        }
     }
 
     public Result sendMessage(Player sender, String message) {
+        if (!Bukkit.isPrimaryThread()) {
+            return Result.DATABASE_ERROR;
+        }
+
+        if (sender == null || !sender.isOnline()) {
+            return Result.NOT_IN_CLAN;
+        }
+
         if (message == null || message.isBlank()) {
             return Result.SUCCESS;
         }
@@ -71,6 +110,7 @@ public final class ClanChatManager {
                     .getClanByPlayer(sender.getUniqueId());
 
             if (clan == null) {
+                chatMode.remove(sender.getUniqueId());
                 return Result.NOT_IN_CLAN;
             }
 
@@ -101,24 +141,10 @@ public final class ClanChatManager {
 
         } catch (SQLException exception) {
             plugin.getLogger().severe(
-                    "Clan Chat error: " + exception.getMessage()
+                    "Clan Chat send error: " + exception.getMessage()
             );
 
             return Result.DATABASE_ERROR;
-        }
-    }
-
-    private boolean isClanMember(Player player) {
-        try {
-            return plugin.getClanManager()
-                    .getClanByPlayer(player.getUniqueId()) != null;
-        } catch (SQLException exception) {
-            plugin.getLogger().severe(
-                    "Gagal memeriksa anggota Clan Chat: "
-                            + exception.getMessage()
-            );
-
-            return false;
         }
     }
 

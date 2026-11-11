@@ -1,0 +1,89 @@
+
+settings:
+  prefix: "&8[&bVortexClan&8]"
+  debug: false
+
+clan:
+  creation:
+    enabled: true
+    cost: 1000
+    minimum-name-length: 3
+    maximum-name-length: 16
+    minimum-tag-length: 2
+    maximum-tag-length: 5
+
+  capacity:
+    default: 5
+    maximum: 100
+
+  level:
+    starting-level: 1
+    exp-per-level: 1000
+    capacity-per-level: 1
+    maximum-level: 100
+
+  tax:
+    enabled: true
+    amount: 500
+    interval-days: 7
+    disband-if-unpaid: true
+
+  bank:
+    enabled: true
+    starting-balance: 0
+    allow-deposit: true
+    allow-withdraw: true
+
+  pvp:
+    default: false
+
+  home:
+    enabled: true
+    teleport-delay: 3
+    cooldown: 60
+
+  invite:
+    expiration-seconds: 300
+
+  chat:
+    format: "&8[&b%clan_tag%&8] &b%player%&7: &f%message%"
+
+war:
+  enabled: true
+  countdown-seconds: 10
+  duration-minutes: 15
+  reward: 10000
+  minimum-members: 1
+
+database:
+  type: SQLITE
+  file: clans.db
+
+gui:
+  title: "&8VortexClan"
+  main-menu-size: 54
+  member-menu-size: 54
+  bank-menu-size: 27
+  leaderboard-menu-size: 54
+
+messages:
+  no-clan: "&cKamu belum memiliki clan!"
+  already-in-clan: "&cKamu sudah tergabung dalam clan!"
+  clan-created: "&aClan berhasil dibuat!"
+  clan-disbanded: "&cClan telah dibubarkan!"
+  no-permission: "&cKamu tidak memiliki permission!"
+  player-not-found: "&cPlayer tidak ditemukan!"
+  insufficient-money: "&cUang kamu tidak mencukupi!"
+  insufficient-bank: "&cSaldo bank clan tidak mencukupi!"
+  tax-paid: "&aPajak clan berhasil dibayar!"
+  tax-unpaid: "&cClan dibubarkan karena pajak tidak dibayar!"
+  pvp-enabled: "&aClan PvP berhasil diaktifkan!"
+  pvp-disabled: "&cClan PvP berhasil dinonaktifkan!"
+  reload-success: "&aKonfigurasi berhasil dimuat ulang!"
+  invalid-name: "&cNama clan tidak valid!"
+  invalid-tag: "&cTag clan tidak valid!"
+  name-taken: "&cNama clan sudah digunakan!"
+  tag-taken: "&cTag clan sudah digunakan!"
+  clan-not-found: "&cClan tidak ditemukan!"
+  not-leader: "&cHanya leader yang dapat melakukan ini!"
+  clan-full: "&cKapasitas anggota clan sudah penuh!"

@@ -2,6 +2,8 @@
 package id.vortexclan;
 
 import id.vortexclan.clan.ClanBankManager;
+import id.vortexclan.clan.ClanLeaderboardManager;
+import id.vortexclan.clan.ClanLevelManager;
 import id.vortexclan.clan.ClanManager;
 import id.vortexclan.clan.ClanMemberManager;
 import id.vortexclan.clan.ClanTaxManager;
@@ -12,18 +14,19 @@ import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 
-import java.util.logging.Level;
-
 public final class VortexClan extends JavaPlugin {
 
     private static VortexClan instance;
 
     private DatabaseManager databaseManager;
     private VaultManager vaultManager;
+
     private ClanManager clanManager;
     private ClanMemberManager clanMemberManager;
     private ClanBankManager clanBankManager;
     private ClanTaxManager clanTaxManager;
+    private ClanLevelManager clanLevelManager;
+    private ClanLeaderboardManager clanLeaderboardManager;
 
     private BukkitTask taxTask;
 
@@ -34,63 +37,76 @@ public final class VortexClan extends JavaPlugin {
         saveDefaultConfig();
 
         try {
-            databaseManager = new DatabaseManager(this);
-            databaseManager.initialize();
-
-            vaultManager = new VaultManager(this);
-            vaultManager.setupEconomy();
-
-            clanManager = new ClanManager(
-                    this,
-                    vaultManager.getEconomy()
-            );
-
-            clanMemberManager = new ClanMemberManager(
-                    this,
-                    clanManager
-            );
-
-            clanBankManager = new ClanBankManager(
-                    this,
-                    clanManager,
-                    vaultManager.getEconomy()
-            );
-
-            clanTaxManager = new ClanTaxManager(this);
-
-            if (getCommand("clan") == null) {
-                throw new IllegalStateException(
-                        "Clan command missing from plugin.yml"
-                );
-            }
-
-            getCommand("clan").setExecutor(
-                    new ClanCommand(this)
-            );
-
+            initializeManagers();
+            registerCommands();
             startTaxTask();
 
-            getLogger().info("Database initialized!");
-            getLogger().info("ClanManager initialized!");
-            getLogger().info("ClanMemberManager initialized!");
-            getLogger().info("ClanBankManager initialized!");
-            getLogger().info("ClanTaxManager initialized!");
-            getLogger().info("VortexClan successfully enabled!");
-
+            getLogger().info("VortexClan berhasil diaktifkan!");
         } catch (Exception exception) {
-            getLogger().log(
-                    Level.SEVERE,
-                    "Failed to enable VortexClan!",
-                    exception
-            );
+            getLogger().severe("Gagal mengaktifkan VortexClan!");
+            exception.printStackTrace();
 
             Bukkit.getPluginManager().disablePlugin(this);
         }
     }
 
+    private void initializeManagers() throws Exception {
+        databaseManager = new DatabaseManager(this);
+        databaseManager.initialize();
+
+        vaultManager = new VaultManager(this);
+        vaultManager.setupEconomy();
+
+        clanManager = new ClanManager(
+                this,
+                databaseManager,
+                vaultManager.getEconomy()
+        );
+
+        clanMemberManager = new ClanMemberManager(
+                this,
+                databaseManager,
+                clanManager
+        );
+
+        clanBankManager = new ClanBankManager(
+                this,
+                databaseManager,
+                clanManager,
+                vaultManager
+        );
+
+        clanTaxManager = new ClanTaxManager(
+                this,
+                databaseManager
+        );
+
+        clanLevelManager = new ClanLevelManager(
+                this,
+                databaseManager,
+                clanManager
+        );
+
+        clanLeaderboardManager = new ClanLeaderboardManager(
+                databaseManager
+        );
+    }
+
+    private void registerCommands() {
+        if (getCommand("clan") == null) {
+            throw new IllegalStateException(
+                    "Command clan tidak ditemukan di plugin.yml!"
+            );
+        }
+
+        ClanCommand clanCommand = new ClanCommand(this);
+
+        getCommand("clan").setExecutor(clanCommand);
+        getCommand("clan").setTabCompleter(clanCommand);
+    }
+
     private void startTaxTask() {
-        if (!getConfig().getBoolean(
-                "clan.tax.enabled", true)) {
+        if (!getConfig().getBoolean("clan.tax.enabled", true)) {
             return;
         }
 
@@ -108,6 +124,7 @@ public final class VortexClan extends JavaPlugin {
     public void onDisable() {
         if (taxTask != null) {
             taxTask.cancel();
+            taxTask = null;
         }
 
         if (databaseManager != null) {
@@ -115,6 +132,8 @@ public final class VortexClan extends JavaPlugin {
         }
 
         instance = null;
+
+        getLogger().info("VortexClan berhasil dinonaktifkan!");
     }
 
     public static VortexClan getInstance() {
@@ -143,5 +162,13 @@ public final class VortexClan extends JavaPlugin {
 
     public ClanTaxManager getClanTaxManager() {
         return clanTaxManager;
+    }
+
+    public ClanLevelManager getClanLevelManager() {
+        return clanLevelManager;
+    }
+
+    public ClanLeaderboardManager getClanLeaderboardManager() {
+        return clanLeaderboardManager;
     }
 }

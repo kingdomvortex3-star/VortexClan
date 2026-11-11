@@ -5,11 +5,15 @@ import id.vortexclan.VortexClan;
 import id.vortexclan.clan.Clan;
 import id.vortexclan.clan.ClanBankManager;
 
+import io.papermc.paper.event.player.AsyncChatEvent;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
+
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
@@ -19,143 +23,355 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 
 import java.sql.SQLException;
+import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
-public final class ClanBankGUI implements Listener {
-
-    private static final int INVENTORY_SIZE = 27;
+public class ClanBankGUI implements Listener {
 
     private final VortexClan plugin;
+    private final ClanBankManager bankManager;
+
+    private final Map<UUID, BankAction> pendingInputs =
+            new ConcurrentHashMap<>();
+
+    private final DecimalFormat moneyFormat =
+            new DecimalFormat("#,##0.##");
 
     public ClanBankGUI(VortexClan plugin) {
         this.plugin = plugin;
+        this.bankManager = plugin.getClanBankManager();
     }
 
     public void open(Player player) {
-        try {
-            Clan clan = plugin.getClanManager()
-                    .getClanByPlayer(player.getUniqueId());
+        Clan clan;
 
-            if (clan == null) {
-                player.sendMessage(message("&cKamu belum memiliki clan!"));
+        try {
+            clan = plugin.getClanManager().getClanByPlayer(
+                    player.getUniqueId()
+            );
+        } catch (SQLException exception) {
+            player.sendMessage(color("&cGagal mengambil data clan."));
+            plugin.getLogger().severe(
+                    "ClanBankGUI: " + exception.getMessage()
+            );
+            return;
+        }
+
+        if (clan == null) {
+            player.sendMessage(color("&cKamu belum memiliki clan."));
+            return;
+        }
+
+        double balance = bankManager.getBalance(
+                String.valueOf(clan.getId())
+        );
+
+        BankHolder holder = new BankHolder();
+
+        Inventory inventory = Bukkit.createInventory(
+                holder,
+                27,
+                color("&8Clan Bank")
+        );
+
+        holder.setInventory(inventory);
+
+        fillBackground(inventory);
+
+        setItem(
+                inventory,
+                11,
+                Material.LIME_DYE,
+                "&a&lDEPOSIT",
+                List.of(
+                        "&7Masukkan uang ke bank clan.",
+                        "",
+                        "&eKlik untuk deposit."
+                )
+        );
+
+        setItem(
+                inventory,
+                13,
+                Material.GOLD_INGOT,
+                "&6&lBANK BALANCE",
+                List.of(
+                        "&7Clan: &b" + clan.getTag(),
+                        "&7Saldo: &a$" + formatMoney(balance),
+                        "",
+                        "&eSaldo bank clan saat ini."
+                )
+        );
+
+        String role = plugin.getClanManager().getMemberRole(
+                player.getUniqueId()
+        );
+
+        boolean canWithdraw = role != null
+                && (role.equalsIgnoreCase("LEADER")
+                || role.equalsIgnoreCase("CO_LEADER"));
+
+        setItem(
+                inventory,
+                15,
+                canWithdraw ? Material.RED_DYE : Material.GRAY_DYE,
+                canWithdraw
+                        ? "&c&lWITHDRAW"
+                        : "&7&lWITHDRAW",
+                canWithdraw
+                        ? List.of(
+                                "&7Tarik uang dari bank clan.",
+                                "",
+                                "&eKlik untuk withdraw."
+                        )
+                        : List.of(
+                                "&cHanya Leader dan Co-Leader",
+                                "&cyang dapat melakukan withdraw."
+                        )
+        );
+
+        setItem(
+                inventory,
+                22,
+                Material.BARRIER,
+                "&c&lTUTUP",
+                List.of("&7Klik untuk menutup menu.")
+        );
+
+        player.openInventory(inventory);
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onInventoryClick(InventoryClickEvent event) {
+        if (!(event.getWhoClicked() instanceof Player player)) {
+            return;
+        }
+
+        if (!(event.getView().getTopInventory().getHolder()
+                instanceof BankHolder)) {
+            return;
+        }
+
+        event.setCancelled(true);
+
+        if (event.getClickedInventory() == null
+                || event.getClickedInventory()
+                != event.getView().getTopInventory()) {
+            return;
+        }
+
+        switch (event.getRawSlot()) {
+            case 11 -> requestAmount(player, BankAction.DEPOSIT);
+
+            case 15 -> requestAmount(player, BankAction.WITHDRAW);
+
+            case 22 -> player.closeInventory();
+
+            default -> {
+            }
+        }
+    }
+
+    @EventHandler
+    public void onInventoryDrag(InventoryDragEvent event) {
+        if (event.getView().getTopInventory().getHolder()
+                instanceof BankHolder) {
+            event.setCancelled(true);
+        }
+    }
+
+    private void requestAmount(Player player, BankAction action) {
+        Clan clan;
+
+        try {
+            clan = plugin.getClanManager().getClanByPlayer(
+                    player.getUniqueId()
+            );
+        } catch (SQLException exception) {
+            player.sendMessage(color("&cGagal mengambil data clan."));
+            return;
+        }
+
+        if (clan == null) {
+            player.closeInventory();
+            player.sendMessage(color("&cKamu belum memiliki clan."));
+            return;
+        }
+
+        if (action == BankAction.DEPOSIT
+                && !plugin.getConfig().getBoolean(
+                        "clan.bank.allow-deposit", true
+                )) {
+            player.sendMessage(color("&cDeposit sedang dinonaktifkan."));
+            return;
+        }
+
+        if (action == BankAction.WITHDRAW) {
+            String role = plugin.getClanManager().getMemberRole(
+                    player.getUniqueId()
+            );
+
+            if (role == null
+                    || (!role.equalsIgnoreCase("LEADER")
+                    && !role.equalsIgnoreCase("CO_LEADER"))) {
+                player.sendMessage(color(
+                        "&cHanya Leader dan Co-Leader yang dapat withdraw."
+                ));
                 return;
             }
 
-            double balance = plugin.getClanBankManager()
-                    .getBalance(clan.getId());
+            if (!plugin.getConfig().getBoolean(
+                    "clan.bank.allow-withdraw", true
+            )) {
+                player.sendMessage(color("&cWithdraw sedang dinonaktifkan."));
+                return;
+            }
+        }
 
-            BankHolder holder = new BankHolder();
+        pendingInputs.put(player.getUniqueId(), action);
 
-            Inventory inventory = Bukkit.createInventory(
-                    holder,
-                    INVENTORY_SIZE,
-                    color("&8&lCLAN BANK")
-            );
+        player.closeInventory();
 
-            holder.setInventory(inventory);
+        player.sendMessage(color("&8&m--------------------------------"));
+        player.sendMessage(color(
+                action == BankAction.DEPOSIT
+                        ? "&a&lCLAN BANK - DEPOSIT"
+                        : "&c&lCLAN BANK - WITHDRAW"
+        ));
+        player.sendMessage("");
+        player.sendMessage(color("&7Masukkan jumlah uang yang ingin "
+                + (action == BankAction.DEPOSIT
+                ? "disimpan."
+                : "ditarik.")));
+        player.sendMessage(color("&7Contoh: &f1000"));
+        player.sendMessage("");
+        player.sendMessage(color("&7Ketik &c&lcancel &7untuk membatalkan."));
+        player.sendMessage(color("&8&m--------------------------------"));
+    }
 
-            fillBackground(inventory);
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onChatInput(AsyncChatEvent event) {
+        Player player = event.getPlayer();
 
-            inventory.setItem(
-                    4,
-                    createItem(
-                            Material.GOLD_BLOCK,
-                            "&6&lCLAN BANK",
-                            List.of(
-                                    "&7Nama Clan: &f" + clan.getName(),
-                                    "&7Tag: &b[" + clan.getTag() + "]",
-                                    "",
-                                    "&7Saldo Bank:",
-                                    "&6$" + formatNumber(balance)
-                            )
-                    )
-            );
+        BankAction action = pendingInputs.remove(
+                player.getUniqueId()
+        );
 
-            inventory.setItem(
-                    11,
-                    createItem(
-                            Material.EMERALD,
-                            "&a&lDEPOSIT",
-                            List.of(
-                                    "&7Masukkan uang ke bank clan.",
-                                    "",
-                                    "&eKlik untuk deposit!",
-                                    "&8Gunakan command:",
-                                    "&f/clan deposit <jumlah>"
-                            )
-                    )
-            );
+        if (action == null) {
+            return;
+        }
 
-            inventory.setItem(
-                    13,
-                    createItem(
-                            Material.BOOK,
-                            "&b&lSALDO BANK",
-                            List.of(
-                                    "&7Saldo clan saat ini:",
-                                    "",
-                                    "&6$" + formatNumber(balance)
-                            )
-                    )
-            );
+        event.setCancelled(true);
 
-            inventory.setItem(
-                    15,
-                    createItem(
-                            Material.GOLD_INGOT,
-                            "&6&lWITHDRAW",
-                            List.of(
-                                    "&7Ambil uang dari bank clan.",
-                                    "",
-                                    "&eKlik untuk withdraw!",
-                                    "&8Gunakan command:",
-                                    "&f/clan withdraw <jumlah>"
-                            )
-                    )
-            );
+        String message = PlainTextComponentSerializer.plainText()
+                .serialize(event.message()).trim();
 
-            inventory.setItem(
-                    22,
-                    createItem(
-                            Material.BARRIER,
-                            "&c&lTUTUP",
-                            List.of("&7Klik untuk menutup menu.")
-                    )
-            );
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            if (!player.isOnline()) {
+                return;
+            }
 
-            player.openInventory(inventory);
+            if (message.equalsIgnoreCase("cancel")) {
+                player.sendMessage(color("&cInput Clan Bank dibatalkan."));
+                open(player);
+                return;
+            }
 
-        } catch (SQLException exception) {
-            plugin.getLogger().severe(
-                    "Gagal membuka Clan Bank GUI: "
-                            + exception.getMessage()
-            );
+            double amount;
 
-            player.sendMessage(message(
-                    "&cGagal mengambil data bank clan!"
-            ));
+            try {
+                amount = Double.parseDouble(message);
+            } catch (NumberFormatException exception) {
+                player.sendMessage(color("&cJumlah uang tidak valid."));
+                player.sendMessage(color(
+                        "&7Buka kembali GUI Clan Bank untuk mencoba lagi."
+                ));
+                return;
+            }
+
+            if (!Double.isFinite(amount) || amount <= 0) {
+                player.sendMessage(color("&cJumlah uang harus lebih dari 0."));
+                return;
+            }
+
+            ClanBankManager.Result result = action == BankAction.DEPOSIT
+                    ? bankManager.deposit(player.getUniqueId(), amount)
+                    : bankManager.withdraw(player.getUniqueId(), amount);
+
+            handleResult(player, result, action, amount);
+        });
+    }
+
+    private void handleResult(
+            Player player,
+            ClanBankManager.Result result,
+            BankAction action,
+            double amount
+    ) {
+        switch (result) {
+            case SUCCESS -> {
+                player.sendMessage(color(
+                        action == BankAction.DEPOSIT
+                                ? "&aBerhasil deposit &f$" + formatMoney(amount)
+                                : "&aBerhasil withdraw &f$" + formatMoney(amount)
+                ));
+
+                open(player);
+            }
+
+            case NO_CLAN ->
+                    player.sendMessage(color("&cKamu belum memiliki clan."));
+
+            case ECONOMY_UNAVAILABLE ->
+                    player.sendMessage(color("&cVault Economy tidak tersedia."));
+
+            case INVALID_AMOUNT ->
+                    player.sendMessage(color("&cJumlah uang tidak valid."));
+
+            case INSUFFICIENT_MONEY ->
+                    player.sendMessage(color("&cUang kamu tidak mencukupi."));
+
+            case INSUFFICIENT_BANK ->
+                    player.sendMessage(color("&cSaldo bank clan tidak mencukupi."));
+
+            case NO_PERMISSION ->
+                    player.sendMessage(color("&cKamu tidak memiliki izin withdraw."));
+
+            case DISABLED ->
+                    player.sendMessage(color("&cFitur bank sedang dinonaktifkan."));
+
+            case DATABASE_ERROR ->
+                    player.sendMessage(color("&cTerjadi kesalahan database."));
         }
     }
 
     private void fillBackground(Inventory inventory) {
         ItemStack background = createItem(
-                Material.GRAY_STAINED_GLASS_PANE,
+                Material.BLACK_STAINED_GLASS_PANE,
                 " ",
                 List.of()
         );
 
-        for (int slot = 0; slot < INVENTORY_SIZE; slot++) {
+        for (int slot = 0; slot < inventory.getSize(); slot++) {
             inventory.setItem(slot, background);
         }
+    }
 
-        int[] emptySlots = {
-                4, 11, 13, 15, 22
-        };
-
-        for (int slot : emptySlots) {
-            inventory.setItem(slot, null);
-        }
+    private void setItem(
+            Inventory inventory,
+            int slot,
+            Material material,
+            String name,
+            List<String> lore
+    ) {
+        inventory.setItem(
+                slot,
+                createItem(material, name, lore)
+        );
     }
 
     private ItemStack createItem(
@@ -182,74 +398,21 @@ public final class ClanBankGUI implements Listener {
         return item;
     }
 
-    private String formatNumber(double number) {
-        return String.format(
-                java.util.Locale.US,
-                "%,.2f",
-                number
-        );
-    }
-
-    private String message(String text) {
-        String prefix = plugin.getConfig().getString(
-                "settings.prefix",
-                "&8[&bVortexClan&8]"
-        );
-
-        return color(prefix + " " + text);
+    private String formatMoney(double amount) {
+        return moneyFormat.format(amount);
     }
 
     private String color(String text) {
         return ChatColor.translateAlternateColorCodes('&', text);
     }
 
-    @EventHandler
-    public void onInventoryClick(InventoryClickEvent event) {
-        if (!(event.getView().getTopInventory().getHolder()
-                instanceof BankHolder)) {
-            return;
-        }
-
-        event.setCancelled(true);
-
-        if (!(event.getWhoClicked() instanceof Player player)) {
-            return;
-        }
-
-        int slot = event.getRawSlot();
-
-        if (slot < 0 || slot >= INVENTORY_SIZE) {
-            return;
-        }
-
-        switch (slot) {
-            case 11 -> {
-                player.closeInventory();
-                player.sendMessage(message(
-                        "&eGunakan &f/clan deposit <jumlah>"
-                ));
-            }
-
-            case 15 -> {
-                player.closeInventory();
-                player.sendMessage(message(
-                        "&eGunakan &f/clan withdraw <jumlah>"
-                ));
-            }
-
-            case 22 -> player.closeInventory();
-
-            default -> {
-            }
-        }
+    public void clearPendingInputs() {
+        pendingInputs.clear();
     }
 
-    @EventHandler
-    public void onInventoryDrag(InventoryDragEvent event) {
-        if (event.getView().getTopInventory().getHolder()
-                instanceof BankHolder) {
-            event.setCancelled(true);
-        }
+    private enum BankAction {
+        DEPOSIT,
+        WITHDRAW
     }
 
     private static class BankHolder implements InventoryHolder {

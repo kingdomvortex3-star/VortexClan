@@ -15,8 +15,8 @@ import id.vortexclan.economy.VaultManager;
 import id.vortexclan.gui.ClanLeaderboardGUI;
 import id.vortexclan.listeners.ClanChatListener;
 import id.vortexclan.listeners.ClanPvPListener;
-
 import org.bukkit.Bukkit;
+import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 
@@ -53,7 +53,6 @@ public final class VortexClan extends JavaPlugin {
             startTaxTask();
 
             getLogger().info("VortexClan berhasil diaktifkan!");
-
         } catch (Exception exception) {
             getLogger().severe("Gagal mengaktifkan VortexClan!");
             exception.printStackTrace();
@@ -62,7 +61,27 @@ public final class VortexClan extends JavaPlugin {
         }
     }
 
-    private void initializeManagers() throws Exception {
+    @Override
+    public void onDisable() {
+        if (taxTask != null) {
+            taxTask.cancel();
+            taxTask = null;
+        }
+
+        if (clanChatManager != null) {
+            clanChatManager.clear();
+        }
+
+        if (databaseManager != null) {
+            databaseManager.close();
+        }
+
+        instance = null;
+
+        getLogger().info("VortexClan berhasil dinonaktifkan!");
+    }
+
+    private void initializeManagers() {
         databaseManager = new DatabaseManager(this);
         databaseManager.initialize();
 
@@ -107,9 +126,13 @@ public final class VortexClan extends JavaPlugin {
                 databaseManager
         );
 
-        clanChatManager = new ClanChatManager(this);
+        clanChatManager = new ClanChatManager(
+                this
+        );
 
-        clanLeaderboardGUI = new ClanLeaderboardGUI(this);
+        clanLeaderboardGUI = new ClanLeaderboardGUI(
+                this
+        );
     }
 
     private void registerListeners() {
@@ -130,20 +153,34 @@ public final class VortexClan extends JavaPlugin {
     }
 
     private void registerCommands() {
-        if (getCommand("clan") == null) {
+        ClanCommand clanCommand = new ClanCommand(this);
+
+        PluginCommand clan = getCommand("clan");
+
+        if (clan == null) {
             throw new IllegalStateException(
-                    "Command clan tidak ditemukan di plugin.yml!"
+                    "Command 'clan' tidak ditemukan di plugin.yml!"
             );
         }
 
-        ClanCommand clanCommand = new ClanCommand(this);
+        clan.setExecutor(clanCommand);
+        clan.setTabCompleter(clanCommand);
 
-        getCommand("clan").setExecutor(clanCommand);
-        getCommand("clan").setTabCompleter(clanCommand);
+        PluginCommand clanChat = getCommand("cc");
+
+        if (clanChat == null) {
+            throw new IllegalStateException(
+                    "Command 'cc' tidak ditemukan di plugin.yml!"
+            );
+        }
+
+        clanChat.setExecutor(clanCommand);
+        clanChat.setTabCompleter(clanCommand);
     }
 
     private void startTaxTask() {
         if (!getConfig().getBoolean("clan.tax.enabled", true)) {
+            getLogger().info("Sistem pajak clan sedang dinonaktifkan.");
             return;
         }
 
@@ -151,30 +188,14 @@ public final class VortexClan extends JavaPlugin {
 
         taxTask = Bukkit.getScheduler().runTaskTimer(
                 this,
-                () -> clanTaxManager.processDueTaxes(),
+                () -> {
+                    if (clanTaxManager != null) {
+                        clanTaxManager.processDueTaxes();
+                    }
+                },
                 6000L,
                 6000L
         );
-    }
-
-    @Override
-    public void onDisable() {
-        if (taxTask != null) {
-            taxTask.cancel();
-            taxTask = null;
-        }
-
-        if (clanChatManager != null) {
-            clanChatManager.clear();
-        }
-
-        if (databaseManager != null) {
-            databaseManager.close();
-        }
-
-        instance = null;
-
-        getLogger().info("VortexClan berhasil dinonaktifkan!");
     }
 
     public static VortexClan getInstance() {

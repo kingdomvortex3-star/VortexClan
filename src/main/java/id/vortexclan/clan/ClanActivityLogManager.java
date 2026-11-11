@@ -2,6 +2,7 @@
 package id.vortexclan.clan;
 
 import id.vortexclan.VortexClan;
+import id.vortexclan.database.DatabaseManager;
 
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -130,14 +131,13 @@ public class ClanActivityLogManager {
                 try (ResultSet result = statement.executeQuery()) {
                     while (result.next()) {
                         String actor = result.getString("actor_uuid");
-
                         UUID actorUuid = null;
 
                         if (actor != null) {
                             try {
                                 actorUuid = UUID.fromString(actor);
                             } catch (IllegalArgumentException ignored) {
-                                // UUID tidak valid, tetap tampilkan log.
+                                // UUID tidak valid, log tetap ditampilkan.
                             }
                         }
 

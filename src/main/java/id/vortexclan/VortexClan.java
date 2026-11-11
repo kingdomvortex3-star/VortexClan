@@ -1,6 +1,7 @@
 
 package id.vortexclan;
 
+import id.vortexclan.clan.ClanBankManager;
 import id.vortexclan.clan.ClanManager;
 import id.vortexclan.clan.ClanMemberManager;
 import id.vortexclan.commands.ClanCommand;
@@ -19,6 +20,7 @@ public final class VortexClan extends JavaPlugin {
     private VaultManager vaultManager;
     private ClanManager clanManager;
     private ClanMemberManager clanMemberManager;
+    private ClanBankManager clanBankManager;
 
     @Override
     public void onEnable() {
@@ -43,6 +45,12 @@ public final class VortexClan extends JavaPlugin {
                     clanManager
             );
 
+            clanBankManager = new ClanBankManager(
+                    this,
+                    clanManager,
+                    vaultManager.getEconomy()
+            );
+
             if (getCommand("clan") == null) {
                 throw new IllegalStateException(
                         "Clan command missing from plugin.yml"
@@ -53,6 +61,10 @@ public final class VortexClan extends JavaPlugin {
                     new ClanCommand(this)
             );
 
+            getLogger().info("Database initialized!");
+            getLogger().info("ClanManager initialized!");
+            getLogger().info("ClanMemberManager initialized!");
+            getLogger().info("ClanBankManager initialized!");
             getLogger().info("VortexClan successfully enabled!");
 
         } catch (Exception exception) {
@@ -93,5 +105,9 @@ public final class VortexClan extends JavaPlugin {
 
     public ClanMemberManager getClanMemberManager() {
         return clanMemberManager;
+    }
+
+    public ClanBankManager getClanBankManager() {
+        return clanBankManager;
     }
 }

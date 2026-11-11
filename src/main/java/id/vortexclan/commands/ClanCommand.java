@@ -5,17 +5,22 @@ import id.vortexclan.VortexClan;
 import id.vortexclan.clan.Clan;
 import id.vortexclan.clan.ClanManager;
 import id.vortexclan.clan.ClanMemberManager;
+import id.vortexclan.clan.ClanLeaderboardManager.SortType;
+
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
+import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
 
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
 
-public final class ClanCommand implements CommandExecutor {
+public final class ClanCommand implements CommandExecutor, TabCompleter {
 
     private final VortexClan plugin;
 
@@ -30,7 +35,6 @@ public final class ClanCommand implements CommandExecutor {
             String label,
             String[] args
     ) {
-
         if (args.length == 0) {
             if (!(sender instanceof Player player)) {
                 send(sender, "&cCommand ini hanya bisa digunakan oleh player!");
@@ -122,6 +126,15 @@ public final class ClanCommand implements CommandExecutor {
                 }
             }
 
+            case "leaderboard", "top" -> {
+                if (!(sender instanceof Player player)) {
+                    send(sender, "&cPlayer only!");
+                    return true;
+                }
+
+                openLeaderboard(player, args);
+            }
+
             case "reload" -> {
                 if (!sender.hasPermission("vortexclan.admin.reload")) {
                     message(sender, "no-permission");
@@ -138,47 +151,83 @@ public final class ClanCommand implements CommandExecutor {
         return true;
     }
 
-    private void createClan(Player player, String name, String tag) {
-        ClanManager.CreateResult result =
-                plugin.getClanManager().createClan(
-                        player.getUniqueId(),
-                        name,
-                        tag
-                );
+    private void openLeaderboard(Player player, String[] args) {
+        SortType sortType = SortType.LEVEL;
 
-        switch (result) {
-            case SUCCESS -> {
-                message(player, "clan-created");
-                send(player, "&7Nama: &b" + name);
-                send(player, "&7Tag: &b" + tag.toUpperCase());
+        if (args.length >= 2) {
+            switch (args[1].toLowerCase()) {
+                case "level" -> sortType = SortType.LEVEL;
+                case "wins" -> sortType = SortType.WINS;
+                case "bank" -> sortType = SortType.BANK;
+
+                default -> {
+                    send(player, "&cKategori tidak valid!");
+                    send(player, "&7Gunakan: &b/clan top <level|wins|bank>");
+                    return;
+                }
             }
+        }
 
-            case DISABLED ->
-                    send(player, "&cPembuatan clan dinonaktifkan!");
+        try {
+            plugin.getClanLeaderboardGUI().open(player, sortType);
+        } catch (Exception exception) {
+            plugin.getLogger().severe(
+                    "Gagal membuka Clan Leaderboard: "
+                            + exception.getMessage()
+            );
 
-            case ALREADY_IN_CLAN ->
-                    message(player, "already-in-clan");
+            send(player, "&cGagal membuka leaderboard!");
+        }
+    }
 
-            case NAME_TAKEN ->
-                    message(player, "name-taken");
+    private void createClan(Player player, String name, String tag) {
+        try {
+            ClanManager.CreateResult result =
+                    plugin.getClanManager().createClan(
+                            player.getUniqueId(),
+                            name,
+                            tag
+                    );
 
-            case TAG_TAKEN ->
-                    message(player, "tag-taken");
+            switch (result) {
+                case SUCCESS -> {
+                    message(player, "clan-created");
+                    send(player, "&7Nama: &b" + name);
+                    send(player, "&7Tag: &b" + tag.toUpperCase());
+                }
 
-            case INVALID_NAME ->
-                    message(player, "invalid-name");
+                case DISABLED ->
+                        send(player, "&cPembuatan clan dinonaktifkan!");
 
-            case INVALID_TAG ->
-                    message(player, "invalid-tag");
+                case ALREADY_IN_CLAN ->
+                        message(player, "already-in-clan");
 
-            case INSUFFICIENT_MONEY ->
-                    message(player, "insufficient-money");
+                case NAME_TAKEN ->
+                        message(player, "name-taken");
 
-            case ECONOMY_UNAVAILABLE ->
-                    send(player, "&cVault Economy tidak tersedia!");
+                case TAG_TAKEN ->
+                        message(player, "tag-taken");
 
-            case DATABASE_ERROR ->
-                    send(player, "&cGagal menyimpan data clan!");
+                case INVALID_NAME ->
+                        message(player, "invalid-name");
+
+                case INVALID_TAG ->
+                        message(player, "invalid-tag");
+
+                case INSUFFICIENT_MONEY ->
+                        message(player, "insufficient-money");
+
+                case ECONOMY_UNAVAILABLE ->
+                        send(player, "&cVault Economy tidak tersedia!");
+
+                case DATABASE_ERROR ->
+                        send(player, "&cGagal menyimpan data clan!");
+            }
+        } catch (Exception exception) {
+            plugin.getLogger().severe(
+                    "Create clan error: " + exception.getMessage()
+            );
+            send(player, "&cTerjadi kesalahan saat membuat clan!");
         }
     }
 
@@ -252,7 +301,8 @@ public final class ClanCommand implements CommandExecutor {
                 }
             }
 
-            case NOT_IN_CLAN -> message(player, "no-clan");
+            case NOT_IN_CLAN ->
+                    message(player, "no-clan");
 
             case ALREADY_IN_CLAN ->
                     message(player, "already-in-clan");
@@ -362,6 +412,7 @@ public final class ClanCommand implements CommandExecutor {
         send(player, "&b&lVORTEX CLAN");
         send(player, "&7Gunakan &b/clan info &7untuk informasi clan.");
         send(player, "&7Gunakan &b/clan create <nama> <tag>");
+        send(player, "&7Gunakan &b/clan leaderboard &7untuk melihat ranking.");
         send(player, "&8&m------------------------------");
     }
 
@@ -436,6 +487,8 @@ public final class ClanCommand implements CommandExecutor {
         send(sender, "&b/clan deny &7- Deny invitation");
         send(sender, "&b/clan kick <player> &7- Kick member");
         send(sender, "&b/clan leave &7- Leave clan");
+        send(sender, "&b/clan leaderboard &7- Clan leaderboard");
+        send(sender, "&b/clan top <level|wins|bank> &7- Ranking category");
         send(sender, "&b/clan reload &7- Reload config");
         send(sender, "&8&m------------------------------");
     }
@@ -460,5 +513,52 @@ public final class ClanCommand implements CommandExecutor {
 
     private String color(String text) {
         return ChatColor.translateAlternateColorCodes('&', text);
+    }
+
+    @Override
+    public List<String> onTabComplete(
+            CommandSender sender,
+            Command command,
+            String alias,
+            String[] args
+    ) {
+        List<String> suggestions = new ArrayList<>();
+
+        if (args.length == 1) {
+            suggestions.add("create");
+            suggestions.add("info");
+            suggestions.add("invite");
+            suggestions.add("accept");
+            suggestions.add("deny");
+            suggestions.add("kick");
+            suggestions.add("leave");
+            suggestions.add("leaderboard");
+            suggestions.add("top");
+            suggestions.add("reload");
+
+        } else if (args.length == 2) {
+            if (args[0].equalsIgnoreCase("top")) {
+                suggestions.add("level");
+                suggestions.add("wins");
+                suggestions.add("bank");
+            }
+
+            if (args[0].equalsIgnoreCase("invite")
+                    || args[0].equalsIgnoreCase("kick")) {
+                for (Player online : Bukkit.getOnlinePlayers()) {
+                    suggestions.add(online.getName());
+                }
+            }
+
+        } else if (args.length == 3
+                && args[0].equalsIgnoreCase("create")) {
+            suggestions.add("<tag>");
+        }
+
+        String input = args[args.length - 1].toLowerCase();
+
+        return suggestions.stream()
+                .filter(value -> value.toLowerCase().startsWith(input))
+                .toList();
     }
 }

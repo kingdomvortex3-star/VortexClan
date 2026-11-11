@@ -34,6 +34,7 @@ public class ClanBankGUI implements Listener {
 
     private final VortexClan plugin;
     private final ClanBankManager bankManager;
+    private final ClanBankTransactionGUI transactionGUI;
 
     private final Map<UUID, BankAction> pendingInputs =
             new ConcurrentHashMap<>();
@@ -44,6 +45,7 @@ public class ClanBankGUI implements Listener {
     public ClanBankGUI(VortexClan plugin) {
         this.plugin = plugin;
         this.bankManager = plugin.getClanBankManager();
+        this.transactionGUI = new ClanBankTransactionGUI(plugin);
     }
 
     public void open(Player player) {
@@ -69,6 +71,21 @@ public class ClanBankGUI implements Listener {
         double balance = bankManager.getBalance(
                 String.valueOf(clan.getId())
         );
+
+        String role;
+
+        try {
+            role = plugin.getClanManager().getMemberRole(
+                    player.getUniqueId()
+            );
+        } catch (SQLException exception) {
+            player.sendMessage(color("&cGagal mengambil role clan."));
+            return;
+        }
+
+        boolean canWithdraw = role != null
+                && (role.equalsIgnoreCase("LEADER")
+                || role.equalsIgnoreCase("CO_LEADER"));
 
         BankHolder holder = new BankHolder();
 
@@ -107,21 +124,11 @@ public class ClanBankGUI implements Listener {
                 )
         );
 
-        String role = plugin.getClanManager().getMemberRole(
-                player.getUniqueId()
-        );
-
-        boolean canWithdraw = role != null
-                && (role.equalsIgnoreCase("LEADER")
-                || role.equalsIgnoreCase("CO_LEADER"));
-
         setItem(
                 inventory,
                 15,
                 canWithdraw ? Material.RED_DYE : Material.GRAY_DYE,
-                canWithdraw
-                        ? "&c&lWITHDRAW"
-                        : "&7&lWITHDRAW",
+                canWithdraw ? "&c&lWITHDRAW" : "&7&lWITHDRAW",
                 canWithdraw
                         ? List.of(
                                 "&7Tarik uang dari bank clan.",
@@ -132,6 +139,18 @@ public class ClanBankGUI implements Listener {
                                 "&cHanya Leader dan Co-Leader",
                                 "&cyang dapat melakukan withdraw."
                         )
+        );
+
+        setItem(
+                inventory,
+                18,
+                Material.WRITABLE_BOOK,
+                "&b&lTRANSACTION HISTORY",
+                List.of(
+                        "&7Lihat riwayat transaksi bank clan.",
+                        "",
+                        "&eKlik untuk membuka riwayat."
+                )
         );
 
         setItem(
@@ -168,6 +187,8 @@ public class ClanBankGUI implements Listener {
             case 11 -> requestAmount(player, BankAction.DEPOSIT);
 
             case 15 -> requestAmount(player, BankAction.WITHDRAW);
+
+            case 18 -> transactionGUI.open(player);
 
             case 22 -> player.closeInventory();
 
@@ -211,9 +232,16 @@ public class ClanBankGUI implements Listener {
         }
 
         if (action == BankAction.WITHDRAW) {
-            String role = plugin.getClanManager().getMemberRole(
-                    player.getUniqueId()
-            );
+            String role;
+
+            try {
+                role = plugin.getClanManager().getMemberRole(
+                        player.getUniqueId()
+                );
+            } catch (SQLException exception) {
+                player.sendMessage(color("&cGagal memeriksa permission clan."));
+                return;
+            }
 
             if (role == null
                     || (!role.equalsIgnoreCase("LEADER")
@@ -243,17 +271,22 @@ public class ClanBankGUI implements Listener {
                         : "&c&lCLAN BANK - WITHDRAW"
         ));
         player.sendMessage("");
-        player.sendMessage(color("&7Masukkan jumlah uang yang ingin "
-                + (action == BankAction.DEPOSIT
-                ? "disimpan."
-                : "ditarik.")));
+        player.sendMessage(color(
+                "&7Masukkan jumlah uang yang ingin "
+                        + (action == BankAction.DEPOSIT
+                        ? "disimpan."
+                        : "ditarik.")
+        ));
         player.sendMessage(color("&7Contoh: &f1000"));
         player.sendMessage("");
         player.sendMessage(color("&7Ketik &c&lcancel &7untuk membatalkan."));
         player.sendMessage(color("&8&m--------------------------------"));
     }
 
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    @EventHandler(
+            priority = EventPriority.HIGHEST,
+            ignoreCancelled = true
+    )
     public void onChatInput(AsyncChatEvent event) {
         Player player = event.getPlayer();
 
@@ -298,9 +331,10 @@ public class ClanBankGUI implements Listener {
                 return;
             }
 
-            ClanBankManager.Result result = action == BankAction.DEPOSIT
-                    ? bankManager.deposit(player.getUniqueId(), amount)
-                    : bankManager.withdraw(player.getUniqueId(), amount);
+            ClanBankManager.Result result =
+                    action == BankAction.DEPOSIT
+                            ? bankManager.deposit(player.getUniqueId(), amount)
+                            : bankManager.withdraw(player.getUniqueId(), amount);
 
             handleResult(player, result, action, amount);
         });

@@ -28,11 +28,14 @@ clan:
     interval-days: 7
     disband-if-unpaid: true
 
+clan:
   bank:
     enabled: true
     starting-balance: 0
     allow-deposit: true
     allow-withdraw: true
+    minimum-deposit: 1
+    minimum-withdraw: 1
 
   pvp:
     default: false

@@ -2,6 +2,7 @@
 package id.vortexclan.clan;
 
 import id.vortexclan.VortexClan;
+import id.vortexclan.database.DatabaseManager;
 
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -26,7 +27,6 @@ public class ClanAllianceManager {
         this.plugin = plugin;
         this.databaseManager = databaseManager;
         this.clanManager = clanManager;
-
         createTables();
     }
 

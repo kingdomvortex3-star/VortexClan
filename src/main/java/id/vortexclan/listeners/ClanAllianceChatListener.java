@@ -1,16 +1,18 @@
 
-package id.vortexclan.listener;
+package id.vortexclan.listeners;
 
 import id.vortexclan.VortexClan;
 import id.vortexclan.clan.ClanAllianceChatManager;
+import io.papermc.paper.event.player.AsyncChatEvent;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
+import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
-import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 
-public class ClanAllianceChatListener implements Listener {
+public final class ClanAllianceChatListener implements Listener {
 
     private final VortexClan plugin;
     private final ClanAllianceChatManager chatManager;
@@ -23,8 +25,11 @@ public class ClanAllianceChatListener implements Listener {
         this.chatManager = chatManager;
     }
 
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
-    public void onPlayerChat(AsyncPlayerChatEvent event) {
+    @EventHandler(
+            priority = EventPriority.HIGHEST,
+            ignoreCancelled = true
+    )
+    public void onPlayerChat(AsyncChatEvent event) {
         Player player = event.getPlayer();
 
         if (!chatManager.isEnabled(player.getUniqueId())) {
@@ -33,13 +38,14 @@ public class ClanAllianceChatListener implements Listener {
 
         event.setCancelled(true);
 
-        String message = event.getMessage();
+        String message = PlainTextComponentSerializer.plainText()
+                .serialize(event.message());
 
-        if (message == null || message.isBlank()) {
+        if (message.isBlank()) {
             return;
         }
 
-        plugin.getServer().getScheduler().runTask(plugin, () -> {
+        Bukkit.getScheduler().runTask(plugin, () -> {
             if (!player.isOnline()) {
                 return;
             }

@@ -2,6 +2,7 @@
 package id.vortexclan.clan;
 
 import id.vortexclan.VortexClan;
+import id.vortexclan.database.DatabaseManager;
 
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -9,7 +10,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
-public class ClanWarRecoveryManager {
+public final class ClanWarRecoveryManager {
 
     private final VortexClan plugin;
     private final DatabaseManager databaseManager;
@@ -39,8 +40,9 @@ public class ClanWarRecoveryManager {
                         ORDER BY id ASC
                         """;
 
-                try (PreparedStatement statement = databaseManager
-                        .getConnection().prepareStatement(sql);
+                try (PreparedStatement statement =
+                             databaseManager.getConnection()
+                                     .prepareStatement(sql);
                      ResultSet result = statement.executeQuery()) {
 
                     while (result.next()) {
@@ -63,10 +65,12 @@ public class ClanWarRecoveryManager {
             try {
                 warManager.endWar(warId);
                 recovered++;
+
             } catch (Exception exception) {
                 plugin.getLogger().severe(
                         "[VortexClan] Gagal memulihkan Clan War ID "
-                                + warId + ": " + exception.getMessage()
+                                + warId + ": "
+                                + exception.getMessage()
                 );
             }
         }
@@ -85,8 +89,9 @@ public class ClanWarRecoveryManager {
                 WHERE status = 'COUNTDOWN'
                 """;
 
-        try (PreparedStatement statement = databaseManager
-                .getConnection().prepareStatement(sql)) {
+        try (PreparedStatement statement =
+                     databaseManager.getConnection()
+                             .prepareStatement(sql)) {
 
             int updated = statement.executeUpdate();
 

@@ -24,90 +24,113 @@ public final class ClanPvPManager {
         DATABASE_ERROR
     }
 
-    public synchronized Result toggle(String playerUuid) {
+    public Result toggle(String playerUuid) {
         if (playerUuid == null || playerUuid.isBlank()) {
             return Result.NOT_IN_CLAN;
         }
 
-        Connection connection = databaseManager.getConnection();
+        synchronized (databaseManager.getLock()) {
+            Connection connection = databaseManager.getConnection();
 
-        try {
-            String clanId;
-            String role;
+            try {
+                connection.setAutoCommit(false);
 
-            String memberSql = """
-                    SELECT clan_id, role
-                    FROM clan_members
-                    WHERE uuid = ?
-                    """;
+                String clanId;
+                String role;
 
-            try (PreparedStatement statement =
-                         connection.prepareStatement(memberSql)) {
+                String memberSql = """
+                        SELECT clan_id, role
+                        FROM clan_members
+                        WHERE uuid = ?
+                        """;
 
-                statement.setString(1, playerUuid);
+                try (PreparedStatement statement =
+                             connection.prepareStatement(memberSql)) {
 
-                try (ResultSet rs = statement.executeQuery()) {
-                    if (!rs.next()) {
-                        return Result.NOT_IN_CLAN;
+                    statement.setString(1, playerUuid);
+
+                    try (ResultSet rs = statement.executeQuery()) {
+                        if (!rs.next()) {
+                            connection.rollback();
+                            return Result.NOT_IN_CLAN;
+                        }
+
+                        clanId = rs.getString("clan_id");
+                        role = rs.getString("role");
                     }
-
-                    clanId = rs.getString("clan_id");
-                    role = rs.getString("role");
                 }
-            }
 
-            if (!canManagePvP(role)) {
-                return Result.NO_PERMISSION;
-            }
+                if (!canManagePvP(role)) {
+                    connection.rollback();
+                    return Result.NO_PERMISSION;
+                }
 
-            boolean currentStatus;
+                boolean currentStatus;
 
-            String clanSql = """
-                    SELECT pvp_enabled
-                    FROM clans
-                    WHERE id = ?
-                    """;
+                String clanSql = """
+                        SELECT pvp_enabled
+                        FROM clans
+                        WHERE id = ?
+                        """;
 
-            try (PreparedStatement statement =
-                         connection.prepareStatement(clanSql)) {
+                try (PreparedStatement statement =
+                             connection.prepareStatement(clanSql)) {
 
-                statement.setString(1, clanId);
+                    statement.setString(1, clanId);
 
-                try (ResultSet rs = statement.executeQuery()) {
-                    if (!rs.next()) {
-                        return Result.NOT_IN_CLAN;
+                    try (ResultSet rs = statement.executeQuery()) {
+                        if (!rs.next()) {
+                            connection.rollback();
+                            return Result.NOT_IN_CLAN;
+                        }
+
+                        currentStatus = rs.getInt("pvp_enabled") == 1;
                     }
+                }
 
-                    currentStatus = rs.getInt("pvp_enabled") == 1;
+                boolean newStatus = !currentStatus;
+
+                String updateSql = """
+                        UPDATE clans
+                        SET pvp_enabled = ?
+                        WHERE id = ?
+                        """;
+
+                try (PreparedStatement statement =
+                             connection.prepareStatement(updateSql)) {
+
+                    statement.setInt(1, newStatus ? 1 : 0);
+                    statement.setString(2, clanId);
+
+                    if (statement.executeUpdate() <= 0) {
+                        connection.rollback();
+                        return Result.DATABASE_ERROR;
+                    }
+                }
+
+                connection.commit();
+
+                return newStatus
+                        ? Result.SUCCESS_ENABLED
+                        : Result.SUCCESS_DISABLED;
+
+            } catch (SQLException exception) {
+                try {
+                    connection.rollback();
+                } catch (SQLException rollbackException) {
+                    exception.addSuppressed(rollbackException);
+                }
+
+                exception.printStackTrace();
+                return Result.DATABASE_ERROR;
+
+            } finally {
+                try {
+                    connection.setAutoCommit(true);
+                } catch (SQLException exception) {
+                    exception.printStackTrace();
                 }
             }
-
-            boolean newStatus = !currentStatus;
-
-            String updateSql = """
-                    UPDATE clans
-                    SET pvp_enabled = ?
-                    WHERE id = ?
-                    """;
-
-            try (PreparedStatement statement =
-                         connection.prepareStatement(updateSql)) {
-
-                statement.setInt(1, newStatus ? 1 : 0);
-                statement.setString(2, clanId);
-
-                if (statement.executeUpdate() <= 0) {
-                    return Result.DATABASE_ERROR;
-                }
-            }
-
-            return newStatus
-                    ? Result.SUCCESS_ENABLED
-                    : Result.SUCCESS_DISABLED;
-
-        } catch (SQLException exception) {
-            exception.printStackTrace();
-            return Result.DATABASE_ERROR;
         }
     }
 
@@ -123,19 +146,26 @@ public final class ClanPvPManager {
     }
 
     public boolean isEnabled(String clanId) throws SQLException {
-        String sql = """
-                SELECT pvp_enabled
-                FROM clans
-                WHERE id = ?
-                """;
+        if (clanId == null || clanId.isBlank()) {
+            return false;
+        }
 
-        try (PreparedStatement statement =
-                     databaseManager.getConnection().prepareStatement(sql)) {
+        synchronized (databaseManager.getLock()) {
+            String sql = """
+                    SELECT pvp_enabled
+                    FROM clans
+                    WHERE id = ?
+                    """;
 
-            statement.setString(1, clanId);
+            try (PreparedStatement statement =
+                         databaseManager.getConnection()
+                                 .prepareStatement(sql)) {
 
-            try (ResultSet rs = statement.executeQuery()) {
-                return rs.next() && rs.getInt("pvp_enabled") == 1;
+                statement.setString(1, clanId);
+
+                try (ResultSet rs = statement.executeQuery()) {
+                    return rs.next() && rs.getInt("pvp_enabled") == 1;
+                }
             }
         }
     }

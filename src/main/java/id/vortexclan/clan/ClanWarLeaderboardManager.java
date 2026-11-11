@@ -17,10 +17,7 @@ public class ClanWarLeaderboardManager {
         this.databaseManager = databaseManager;
     }
 
-    public List<WarLeaderboardEntry> getTop(
-            String sortType,
-            int limit
-    ) {
+    public List<WarLeaderboardEntry> getTop(String sortType, int limit) {
         return getTop(sortType, limit, 0);
     }
 

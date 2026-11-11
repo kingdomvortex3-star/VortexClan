@@ -3,6 +3,7 @@ package id.vortexclan;
 
 import id.vortexclan.clan.ClanBankManager;
 import id.vortexclan.clan.ClanChatManager;
+import id.vortexclan.clan.ClanHomeManager;
 import id.vortexclan.clan.ClanLeaderboardManager;
 import id.vortexclan.clan.ClanLevelManager;
 import id.vortexclan.clan.ClanManager;
@@ -15,6 +16,7 @@ import id.vortexclan.economy.VaultManager;
 import id.vortexclan.gui.ClanLeaderboardGUI;
 import id.vortexclan.listeners.ClanChatListener;
 import id.vortexclan.listeners.ClanPvPListener;
+
 import org.bukkit.Bukkit;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -35,6 +37,7 @@ public final class VortexClan extends JavaPlugin {
     private ClanLeaderboardManager clanLeaderboardManager;
     private ClanPvPManager clanPvPManager;
     private ClanChatManager clanChatManager;
+    private ClanHomeManager clanHomeManager;
 
     private ClanLeaderboardGUI clanLeaderboardGUI;
 
@@ -53,6 +56,7 @@ public final class VortexClan extends JavaPlugin {
             startTaxTask();
 
             getLogger().info("VortexClan berhasil diaktifkan!");
+
         } catch (Exception exception) {
             getLogger().severe("Gagal mengaktifkan VortexClan!");
             exception.printStackTrace();
@@ -70,6 +74,10 @@ public final class VortexClan extends JavaPlugin {
 
         if (clanChatManager != null) {
             clanChatManager.clear();
+        }
+
+        if (clanHomeManager != null) {
+            clanHomeManager.clearCooldowns();
         }
 
         if (databaseManager != null) {
@@ -130,6 +138,11 @@ public final class VortexClan extends JavaPlugin {
                 this
         );
 
+        clanHomeManager = new ClanHomeManager(
+                this,
+                databaseManager
+        );
+
         clanLeaderboardGUI = new ClanLeaderboardGUI(
                 this
         );
@@ -180,7 +193,9 @@ public final class VortexClan extends JavaPlugin {
 
     private void startTaxTask() {
         if (!getConfig().getBoolean("clan.tax.enabled", true)) {
-            getLogger().info("Sistem pajak clan sedang dinonaktifkan.");
+            getLogger().info(
+                    "Sistem pajak clan sedang dinonaktifkan."
+            );
             return;
         }
 
@@ -240,6 +255,10 @@ public final class VortexClan extends JavaPlugin {
 
     public ClanChatManager getClanChatManager() {
         return clanChatManager;
+    }
+
+    public ClanHomeManager getClanHomeManager() {
+        return clanHomeManager;
     }
 
     public ClanLeaderboardGUI getClanLeaderboardGUI() {

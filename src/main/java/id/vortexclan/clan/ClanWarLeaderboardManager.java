@@ -1,6 +1,8 @@
 
 package id.vortexclan.clan;
 
+import id.vortexclan.database.DatabaseManager;
+
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -15,7 +17,10 @@ public class ClanWarLeaderboardManager {
         this.databaseManager = databaseManager;
     }
 
-    public List<WarLeaderboardEntry> getTop(String sortType, int limit) {
+    public List<WarLeaderboardEntry> getTop(
+            String sortType,
+            int limit
+    ) {
         return getTop(sortType, limit, 0);
     }
 
@@ -32,8 +37,8 @@ public class ClanWarLeaderboardManager {
             return entries;
         }
 
-        limit = Math.max(1, Math.min(limit, 100));
-        offset = Math.max(0, offset);
+        int safeLimit = Math.max(1, Math.min(limit, 100));
+        int safeOffset = Math.max(0, offset);
 
         String sql = """
                 SELECT id, name, tag, wins, losses, kills
@@ -46,11 +51,11 @@ public class ClanWarLeaderboardManager {
             try (PreparedStatement statement = databaseManager
                     .getConnection().prepareStatement(sql)) {
 
-                statement.setInt(1, limit);
-                statement.setInt(2, offset);
+                statement.setInt(1, safeLimit);
+                statement.setInt(2, safeOffset);
 
                 try (ResultSet result = statement.executeQuery()) {
-                    int position = offset + 1;
+                    int position = safeOffset + 1;
 
                     while (result.next()) {
                         entries.add(new WarLeaderboardEntry(
@@ -76,7 +81,7 @@ public class ClanWarLeaderboardManager {
     public int getRank(String clanId, String sortType) {
         String orderBy = getOrderBy(sortType);
 
-        if (orderBy == null) {
+        if (orderBy == null || clanId == null) {
             return -1;
         }
 
@@ -94,7 +99,7 @@ public class ClanWarLeaderboardManager {
                 int position = 1;
 
                 while (result.next()) {
-                    if (result.getString("id").equals(clanId)) {
+                    if (clanId.equals(result.getString("id"))) {
                         return position;
                     }
 
@@ -117,9 +122,7 @@ public class ClanWarLeaderboardManager {
                     .getConnection().prepareStatement(sql);
                  ResultSet result = statement.executeQuery()) {
 
-                if (result.next()) {
-                    return result.getInt(1);
-                }
+                return result.next() ? result.getInt(1) : 0;
 
             } catch (SQLException exception) {
                 exception.printStackTrace();

@@ -16,6 +16,14 @@ public class ClanWarLeaderboardManager {
     }
 
     public List<WarLeaderboardEntry> getTop(String sortType, int limit) {
+        return getTop(sortType, limit, 0);
+    }
+
+    public List<WarLeaderboardEntry> getTop(
+            String sortType,
+            int limit,
+            int offset
+    ) {
         List<WarLeaderboardEntry> entries = new ArrayList<>();
 
         String orderBy = getOrderBy(sortType);
@@ -25,12 +33,13 @@ public class ClanWarLeaderboardManager {
         }
 
         limit = Math.max(1, Math.min(limit, 100));
+        offset = Math.max(0, offset);
 
         String sql = """
                 SELECT id, name, tag, wins, losses, kills
                 FROM clans
                 ORDER BY %s
-                LIMIT ?
+                LIMIT ? OFFSET ?
                 """.formatted(orderBy);
 
         synchronized (databaseManager.getLock()) {
@@ -38,9 +47,10 @@ public class ClanWarLeaderboardManager {
                     .getConnection().prepareStatement(sql)) {
 
                 statement.setInt(1, limit);
+                statement.setInt(2, offset);
 
                 try (ResultSet result = statement.executeQuery()) {
-                    int position = 1;
+                    int position = offset + 1;
 
                     while (result.next()) {
                         entries.add(new WarLeaderboardEntry(
@@ -117,6 +127,19 @@ public class ClanWarLeaderboardManager {
         }
 
         return 0;
+    }
+
+    public int getTotalPages(int pageSize) {
+        if (pageSize <= 0) {
+            return 1;
+        }
+
+        int total = getTotalClans();
+
+        return Math.max(
+                1,
+                (int) Math.ceil(total / (double) pageSize)
+        );
     }
 
     private String getOrderBy(String sortType) {

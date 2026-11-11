@@ -32,92 +32,86 @@ public final class ClanLeaderboardGUI implements Listener {
             37, 38, 39, 40, 41, 42, 43
     };
 
-    private static final int PAGE_SIZE = ENTRY_SLOTS.length;
-
     private final VortexClan plugin;
     private final ClanLeaderboardManager leaderboardManager;
 
-    public ClanLeaderboardGUI(VortexClan plugin) {
+    public ClanLeaderboardGUI(
+            VortexClan plugin,
+            ClanLeaderboardManager leaderboardManager
+    ) {
         this.plugin = plugin;
-        this.leaderboardManager = plugin.getClanLeaderboardManager();
+        this.leaderboardManager = leaderboardManager;
     }
 
     public void open(Player player) {
-        open(player, SortType.LEVEL, 0);
+        open(player, SortType.LEVEL);
     }
 
     public void open(Player player, SortType sortType) {
-        open(player, sortType, 0);
-    }
-
-    public void open(Player player, SortType sortType, int page) {
-        if (sortType == null) {
-            sortType = SortType.LEVEL;
-        }
-
-        List<ClanRank> allClans;
-
-        try {
-            allClans = leaderboardManager.getTopClans(
-                    sortType,
-                    100
-            );
-        } catch (SQLException exception) {
-            plugin.getLogger().severe(
-                    "[ClanLeaderboardGUI] " + exception.getMessage()
-            );
-            player.sendMessage(color("&cGagal mengambil leaderboard clan."));
+        if (player == null || !player.isOnline()) {
             return;
         }
 
-        int totalPages = Math.max(
-                1,
-                (allClans.size() + PAGE_SIZE - 1) / PAGE_SIZE
-        );
+        SortType selectedSort = sortType == null
+                ? SortType.LEVEL
+                : sortType;
 
-        int currentPage = Math.max(
-                0,
-                Math.min(page, totalPages - 1)
-        );
+        List<ClanRank> rankings;
 
-        int start = currentPage * PAGE_SIZE;
-        int end = Math.min(start + PAGE_SIZE, allClans.size());
+        int totalClans;
 
-        ClanLeaderboardHolder holder = new ClanLeaderboardHolder(
-                sortType,
-                currentPage
-        );
+        try {
+            rankings = leaderboardManager.getTopClans(
+                    selectedSort,
+                    ENTRY_SLOTS.length
+            );
+
+            totalClans = leaderboardManager.getTotalClans();
+
+        } catch (SQLException exception) {
+            plugin.getLogger().severe(
+                    "[ClanLeaderboardGUI] Gagal mengambil leaderboard: "
+                            + exception.getMessage()
+            );
+
+            player.sendMessage(color(
+                    "&cGagal memuat leaderboard clan."
+            ));
+            return;
+        }
+
+        LeaderboardHolder holder = new LeaderboardHolder(selectedSort);
 
         Inventory inventory = Bukkit.createInventory(
                 holder,
                 54,
-                color("&8Clan Leaderboard")
+                color("&8&lCLAN LEADERBOARD")
         );
 
         holder.setInventory(inventory);
 
         fillBackground(inventory);
 
-        for (int index = start; index < end; index++) {
-            ClanRank clan = allClans.get(index);
-
-            int slot = ENTRY_SLOTS[index - start];
+        for (int i = 0; i < rankings.size(); i++) {
+            ClanRank rank = rankings.get(i);
 
             inventory.setItem(
-                    slot,
+                    ENTRY_SLOTS[i],
                     createItem(
-                            getRankMaterial(clan.position()),
-                            getRankColor(clan.position())
-                                    + "&l#" + clan.position()
-                                    + " &f" + clan.clanName(),
+                            getRankMaterial(rank.position()),
+                            getRankColor(rank.position())
+                                    + "&l#" + rank.position()
+                                    + " &f" + rank.clanName(),
                             List.of(
-                                    "&7Tag: &b" + clan.clanTag(),
-                                    "&7Level: &e" + clan.level(),
-                                    "&7EXP: &f" + clan.exp(),
-                                    "&7Bank: &a$" + format(clan.bank()),
-                                    "&7Wins: &a" + clan.wins(),
-                                    "&7Losses: &c" + clan.losses(),
-                                    "&7Kills: &e" + clan.kills()
+                                    "&7Tag: &b" + rank.clanTag(),
+                                    "&7Level: &a" + rank.level(),
+                                    "&7EXP: &e" + formatNumber(rank.exp()),
+                                    "&7Bank: &6$" + formatNumber(rank.bank()),
+                                    "&7Wins: &a" + rank.wins(),
+                                    "&7Losses: &c" + rank.losses(),
+                                    "&7Kills: &e" + rank.kills(),
+                                    "",
+                                    "&8Clan ID: " + rank.clanId()
                             )
                     )
             );
@@ -126,14 +120,16 @@ public final class ClanLeaderboardGUI implements Listener {
         inventory.setItem(
                 45,
                 createItem(
-                        Material.EXPERIENCE_BOTTLE,
-                        sortType == SortType.LEVEL
+                        selectedSort == SortType.LEVEL
+                                ? Material.ENCHANTED_BOOK
+                                : Material.BOOK,
+                        selectedSort == SortType.LEVEL
                                 ? "&a&lLEVEL"
                                 : "&eLevel",
                         List.of(
                                 "&7Ranking berdasarkan level clan.",
                                 "",
-                                sortType == SortType.LEVEL
+                                selectedSort == SortType.LEVEL
                                         ? "&aSedang dipilih"
                                         : "&eKlik untuk memilih."
                         )
@@ -143,14 +139,16 @@ public final class ClanLeaderboardGUI implements Listener {
         inventory.setItem(
                 47,
                 createItem(
-                        Material.GOLD_INGOT,
-                        sortType == SortType.BANK
-                                ? "&a&lBANK"
-                                : "&eBank",
+                        selectedSort == SortType.WINS
+                                ? Material.GOLDEN_SWORD
+                                : Material.IRON_SWORD,
+                        selectedSort == SortType.WINS
+                                ? "&a&lWINS"
+                                : "&eWins",
                         List.of(
-                                "&7Ranking berdasarkan saldo bank.",
+                                "&7Ranking berdasarkan kemenangan.",
                                 "",
-                                sortType == SortType.BANK
+                                selectedSort == SortType.WINS
                                         ? "&aSedang dipilih"
                                         : "&eKlik untuk memilih."
                         )
@@ -160,13 +158,11 @@ public final class ClanLeaderboardGUI implements Listener {
         inventory.setItem(
                 49,
                 createItem(
-                        Material.BOOK,
-                        "&b&lLEADERBOARD",
+                        Material.PAPER,
+                        "&b&lSTATISTIK CLAN",
                         List.of(
-                                "&7Kategori: &f" + sortType.name(),
-                                "&7Total clan: &f" + allClans.size(),
-                                "&7Halaman: &f" + (currentPage + 1)
-                                        + "/" + totalPages,
+                                "&7Total clan: &f" + totalClans,
+                                "&7Ditampilkan: &f" + rankings.size(),
                                 "",
                                 "&8VortexClan"
                         )
@@ -176,39 +172,19 @@ public final class ClanLeaderboardGUI implements Listener {
         inventory.setItem(
                 51,
                 createItem(
-                        Material.GOLDEN_SWORD,
-                        sortType == SortType.WINS
-                                ? "&a&lWINS"
-                                : "&eWins",
+                        selectedSort == SortType.BANK
+                                ? Material.EMERALD
+                                : Material.GOLD_INGOT,
+                        selectedSort == SortType.BANK
+                                ? "&a&lBANK"
+                                : "&eBank",
                         List.of(
-                                "&7Ranking berdasarkan kemenangan.",
+                                "&7Ranking berdasarkan saldo bank.",
                                 "",
-                                sortType == SortType.WINS
+                                selectedSort == SortType.BANK
                                         ? "&aSedang dipilih"
                                         : "&eKlik untuk memilih."
                         )
-                )
-        );
-
-        inventory.setItem(
-                48,
-                createItem(
-                        currentPage > 0
-                                ? Material.ARROW
-                                : Material.GRAY_STAINED_GLASS_PANE,
-                        "&a&lPREVIOUS",
-                        List.of("&7Halaman sebelumnya.")
-                )
-        );
-
-        inventory.setItem(
-                50,
-                createItem(
-                        currentPage + 1 < totalPages
-                                ? Material.ARROW
-                                : Material.GRAY_STAINED_GLASS_PANE,
-                        "&a&lNEXT",
-                        List.of("&7Halaman berikutnya.")
                 )
         );
 
@@ -217,7 +193,7 @@ public final class ClanLeaderboardGUI implements Listener {
                 createItem(
                         Material.BARRIER,
                         "&c&lTUTUP",
-                        List.of("&7Klik untuk menutup menu.")
+                        List.of("&7Klik untuk menutup leaderboard.")
                 )
         );
 
@@ -226,16 +202,16 @@ public final class ClanLeaderboardGUI implements Listener {
 
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
-        if (!(event.getWhoClicked() instanceof Player player)) {
-            return;
-        }
-
-        if (!(event.getInventory().getHolder()
-                instanceof ClanLeaderboardHolder holder)) {
+        if (!(event.getView().getTopInventory().getHolder()
+                instanceof LeaderboardHolder holder)) {
             return;
         }
 
         event.setCancelled(true);
+
+        if (!(event.getWhoClicked() instanceof Player player)) {
+            return;
+        }
 
         if (event.getClickedInventory() == null
                 || event.getClickedInventory()
@@ -243,20 +219,12 @@ public final class ClanLeaderboardGUI implements Listener {
             return;
         }
 
-        int slot = event.getRawSlot();
+        switch (event.getRawSlot()) {
+            case 45 -> open(player, SortType.LEVEL);
 
-        switch (slot) {
-            case 45 -> open(player, SortType.LEVEL, 0);
-            case 47 -> open(player, SortType.BANK, 0);
-            case 51 -> open(player, SortType.WINS, 0);
+            case 47 -> open(player, SortType.WINS);
 
-            case 48 -> {
-                if (holder.page > 0) {
-                    open(player, holder.sortType, holder.page - 1);
-                }
-            }
-
-            case 50 -> open(player, holder.sortType, holder.page + 1);
+            case 51 -> open(player, SortType.BANK);
 
             case 53 -> player.closeInventory();
 
@@ -267,40 +235,26 @@ public final class ClanLeaderboardGUI implements Listener {
 
     @EventHandler
     public void onInventoryDrag(InventoryDragEvent event) {
-        if (event.getInventory().getHolder()
-                instanceof ClanLeaderboardHolder) {
+        if (event.getView().getTopInventory().getHolder()
+                instanceof LeaderboardHolder) {
             event.setCancelled(true);
         }
     }
 
     private void fillBackground(Inventory inventory) {
-        ItemStack filler = createItem(
+        ItemStack background = createItem(
                 Material.BLACK_STAINED_GLASS_PANE,
-                " ",
+                "&8 ",
                 List.of()
         );
 
         for (int slot = 0; slot < inventory.getSize(); slot++) {
-            inventory.setItem(slot, filler);
+            inventory.setItem(slot, background);
         }
-    }
 
-    private Material getRankMaterial(int position) {
-        return switch (position) {
-            case 1 -> Material.DIAMOND;
-            case 2 -> Material.EMERALD;
-            case 3 -> Material.GOLD_INGOT;
-            default -> Material.PLAYER_HEAD;
-        };
-    }
-
-    private String getRankColor(int position) {
-        return switch (position) {
-            case 1 -> "&b";
-            case 2 -> "&a";
-            case 3 -> "&6";
-            default -> "&f";
-        };
+        for (int slot : ENTRY_SLOTS) {
+            inventory.setItem(slot, null);
+        }
     }
 
     private ItemStack createItem(
@@ -327,27 +281,51 @@ public final class ClanLeaderboardGUI implements Listener {
         return item;
     }
 
-    private String format(double amount) {
-        return String.format("%,.2f", amount);
+    private Material getRankMaterial(int position) {
+        return switch (position) {
+            case 1 -> Material.GOLD_BLOCK;
+            case 2 -> Material.IRON_BLOCK;
+            case 3 -> Material.COPPER_BLOCK;
+            default -> Material.PLAYER_HEAD;
+        };
+    }
+
+    private String getRankColor(int position) {
+        return switch (position) {
+            case 1 -> "&6";
+            case 2 -> "&f";
+            case 3 -> "&c";
+            default -> "&b";
+        };
+    }
+
+    private String formatNumber(Number number) {
+        return String.format(
+                java.util.Locale.US,
+                "%,d",
+                number.longValue()
+        );
     }
 
     private String color(String text) {
         return ChatColor.translateAlternateColorCodes('&', text);
     }
 
-    private static final class ClanLeaderboardHolder
+    private static final class LeaderboardHolder
             implements InventoryHolder {
 
         private final SortType sortType;
-        private final int page;
         private Inventory inventory;
 
-        private ClanLeaderboardHolder(SortType sortType, int page) {
+        private LeaderboardHolder(SortType sortType) {
             this.sortType = sortType;
-            this.page = page;
         }
 
-        private void setInventory(Inventory inventory) {
+        public SortType getSortType() {
+            return sortType;
+        }
+
+        public void setInventory(Inventory inventory) {
             this.inventory = inventory;
         }
 

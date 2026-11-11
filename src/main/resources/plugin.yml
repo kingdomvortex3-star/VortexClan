@@ -1,0 +1,35 @@
+
+name: VortexClan
+version: 1.0.0
+main: id.vortexclan.VortexClan
+api-version: '26.3'
+author: VortexTeam
+description: Advanced Clan System for Minecraft
+
+softdepend:
+  - Vault
+  - PlaceholderAPI
+
+commands:
+  clan:
+    description: Main VortexClan command
+    usage: /clan
+    aliases:
+      - c
+
+permissions:
+  vortexclan.admin:
+    description: Full access to VortexClan administration
+    default: op
+
+  vortexclan.use:
+    description: Access to clan commands
+    default: true
+
+  vortexclan.create:
+    description: Create a clan
+    default: true
+
+  vortexclan.admin.reload:
+    description: Reload VortexClan configuration
+    default: op

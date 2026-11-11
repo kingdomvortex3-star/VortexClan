@@ -10,6 +10,8 @@ import id.vortexclan.clan.ClanTaxManager;
 import id.vortexclan.commands.ClanCommand;
 import id.vortexclan.database.DatabaseManager;
 import id.vortexclan.economy.VaultManager;
+import id.vortexclan.gui.ClanLeaderboardGUI;
+
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
@@ -28,6 +30,8 @@ public final class VortexClan extends JavaPlugin {
     private ClanLevelManager clanLevelManager;
     private ClanLeaderboardManager clanLeaderboardManager;
 
+    private ClanLeaderboardGUI clanLeaderboardGUI;
+
     private BukkitTask taxTask;
 
     @Override
@@ -38,6 +42,7 @@ public final class VortexClan extends JavaPlugin {
 
         try {
             initializeManagers();
+            registerListeners();
             registerCommands();
             startTaxTask();
 
@@ -89,6 +94,15 @@ public final class VortexClan extends JavaPlugin {
 
         clanLeaderboardManager = new ClanLeaderboardManager(
                 databaseManager
+        );
+
+        clanLeaderboardGUI = new ClanLeaderboardGUI(this);
+    }
+
+    private void registerListeners() {
+        Bukkit.getPluginManager().registerEvents(
+                clanLeaderboardGUI,
+                this
         );
     }
 
@@ -170,5 +184,9 @@ public final class VortexClan extends JavaPlugin {
 
     public ClanLeaderboardManager getClanLeaderboardManager() {
         return clanLeaderboardManager;
+    }
+
+    public ClanLeaderboardGUI getClanLeaderboardGUI() {
+        return clanLeaderboardGUI;
     }
 }

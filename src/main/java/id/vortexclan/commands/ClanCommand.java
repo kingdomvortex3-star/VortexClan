@@ -7,6 +7,7 @@ import id.vortexclan.clan.ClanManager;
 import id.vortexclan.clan.ClanMemberManager;
 import id.vortexclan.clan.ClanPvPManager;
 import id.vortexclan.clan.ClanChatManager;
+import id.vortexclan.clan.ClanHomeManager;
 import id.vortexclan.clan.ClanLeaderboardManager.SortType;
 
 import org.bukkit.Bukkit;
@@ -20,6 +21,7 @@ import org.bukkit.entity.Player;
 
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 public final class ClanCommand implements CommandExecutor, TabCompleter {
@@ -54,7 +56,7 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
 
         if (args.length == 0) {
             if (!(sender instanceof Player player)) {
-                send(sender, "&cCommand ini hanya bisa digunakan oleh player!");
+                showHelp(sender);
                 return true;
             }
 
@@ -161,6 +163,24 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
                 toggleClanPvP(player);
             }
 
+            case "home" -> {
+                if (!(sender instanceof Player player)) {
+                    send(sender, "&cPlayer only!");
+                    return true;
+                }
+
+                teleportClanHome(player);
+            }
+
+            case "sethome" -> {
+                if (!(sender instanceof Player player)) {
+                    send(sender, "&cPlayer only!");
+                    return true;
+                }
+
+                setClanHome(player);
+            }
+
             case "chat" -> {
                 if (!(sender instanceof Player player)) {
                     send(sender, "&cPlayer only!");
@@ -172,7 +192,10 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
                 } else {
                     sendClanMessage(
                             player,
-                            String.join(" ", java.util.Arrays.copyOfRange(args, 1, args.length))
+                            String.join(
+                                    " ",
+                                    Arrays.copyOfRange(args, 1, args.length)
+                            )
                     );
                 }
             }
@@ -191,6 +214,69 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
         }
 
         return true;
+    }
+
+    private void setClanHome(Player player) {
+        ClanHomeManager.Result result =
+                plugin.getClanHomeManager().setHome(player);
+
+        switch (result) {
+            case SUCCESS -> {
+                // Pesan sukses sudah dikirim oleh ClanHomeManager.
+            }
+
+            case NOT_IN_CLAN ->
+                    message(player, "no-clan");
+
+            case NO_PERMISSION ->
+                    send(player,
+                            "&cHanya Leader dan Co-Leader yang bisa mengatur Clan Home!");
+
+            case DISABLED ->
+                    send(player, "&cSistem Clan Home sedang dinonaktifkan!");
+
+            case DATABASE_ERROR ->
+                    send(player, "&cGagal menyimpan lokasi Clan Home!");
+
+            case WORLD_NOT_FOUND ->
+                    send(player, "&cWorld lokasi Clan Home tidak valid!");
+
+            default ->
+                    send(player, "&cGagal mengatur Clan Home!");
+        }
+    }
+
+    private void teleportClanHome(Player player) {
+        ClanHomeManager.Result result =
+                plugin.getClanHomeManager().teleportHome(player);
+
+        switch (result) {
+            case SUCCESS, TELEPORT_STARTED -> {
+                // Pesan teleport sudah ditangani oleh ClanHomeManager.
+            }
+
+            case NOT_IN_CLAN ->
+                    message(player, "no-clan");
+
+            case HOME_NOT_SET ->
+                    send(player, "&cClan Home belum diatur!");
+
+            case WORLD_NOT_FOUND ->
+                    send(player, "&cWorld Clan Home tidak ditemukan!");
+
+            case COOLDOWN -> {
+                // Pesan cooldown sudah dikirim oleh ClanHomeManager.
+            }
+
+            case DISABLED ->
+                    send(player, "&cSistem Clan Home sedang dinonaktifkan!");
+
+            case TELEPORT_CANCELLED ->
+                    send(player, "&cTeleport Clan Home dibatalkan!");
+
+            case DATABASE_ERROR ->
+                    send(player, "&cGagal mengambil data Clan Home!");
+        }
     }
 
     private void toggleClanChat(Player player) {
@@ -246,7 +332,8 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
                     message(player, "no-clan");
 
             case NO_PERMISSION ->
-                    send(player, "&cHanya Leader dan Co-Leader yang bisa mengubah Clan PvP!");
+                    send(player,
+                            "&cHanya Leader dan Co-Leader yang bisa mengubah Clan PvP!");
 
             case DATABASE_ERROR ->
                     send(player, "&cGagal mengubah status Clan PvP!");
@@ -290,7 +377,8 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
 
                 default -> {
                     send(player, "&cKategori tidak valid!");
-                    send(player, "&7Gunakan: &b/clan top <level|wins|bank>");
+                    send(player,
+                            "&7Gunakan: &b/clan top <level|wins|bank>");
                     return;
                 }
             }
@@ -495,7 +583,8 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
                     send(executor, "&cLeader tidak dapat dikeluarkan!");
 
             case CANNOT_KICK_HIGHER_ROLE ->
-                    send(executor, "&cKamu tidak dapat mengeluarkan anggota dengan role tersebut!");
+                    send(executor,
+                            "&cKamu tidak dapat mengeluarkan anggota dengan role tersebut!");
 
             default ->
                     send(executor, "&cGagal mengeluarkan anggota!");
@@ -533,7 +622,8 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
         } else if (result ==
                 ClanMemberManager.Result.LEADER_CANNOT_LEAVE) {
             send(player, "&cLeader tidak bisa keluar begitu saja!");
-            send(player, "&7Transfer kepemimpinan atau bubarkan clan.");
+            send(player,
+                    "&7Transfer kepemimpinan atau bubarkan clan.");
         } else {
             send(player, "&cGagal keluar dari clan!");
         }
@@ -591,6 +681,8 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
         send(player, "&b&lVORTEX CLAN");
         send(player, "&7/clan info &8- &fInformasi clan");
         send(player, "&7/clan create <nama> <tag> &8- &fBuat clan");
+        send(player, "&7/clan home &8- &fTeleport ke Clan Home");
+        send(player, "&7/clan sethome &8- &fAtur Clan Home");
         send(player, "&7/clan leaderboard &8- &fRanking clan");
         send(player, "&7/clan pvp &8- &fToggle Clan PvP");
         send(player, "&7/clan chat &8- &fToggle Clan Chat");
@@ -625,6 +717,8 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
         send(sender, "&b/clan deny &7- Deny invitation");
         send(sender, "&b/clan kick <player> &7- Kick member");
         send(sender, "&b/clan leave &7- Leave clan");
+        send(sender, "&b/clan sethome &7- Set Clan Home");
+        send(sender, "&b/clan home &7- Teleport to Clan Home");
         send(sender, "&b/clan pvp &7- Toggle Clan PvP");
         send(sender, "&b/clan chat &7- Toggle Clan Chat");
         send(sender, "&b/clan chat <pesan> &7- Kirim pesan clan");
@@ -678,6 +772,8 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
             suggestions.add("deny");
             suggestions.add("kick");
             suggestions.add("leave");
+            suggestions.add("home");
+            suggestions.add("sethome");
             suggestions.add("pvp");
             suggestions.add("chat");
             suggestions.add("leaderboard");

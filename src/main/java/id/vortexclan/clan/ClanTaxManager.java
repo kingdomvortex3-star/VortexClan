@@ -2,7 +2,9 @@
 package id.vortexclan.clan;
 
 import id.vortexclan.VortexClan;
+import id.vortexclan.database.DatabaseManager;
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 
 import java.sql.Connection;
@@ -17,9 +19,14 @@ import java.util.logging.Level;
 public final class ClanTaxManager {
 
     private final VortexClan plugin;
+    private final DatabaseManager databaseManager;
 
-    public ClanTaxManager(VortexClan plugin) {
+    public ClanTaxManager(
+            VortexClan plugin,
+            DatabaseManager databaseManager
+    ) {
         this.plugin = plugin;
+        this.databaseManager = databaseManager;
     }
 
     private record DueClan(
@@ -46,65 +53,61 @@ public final class ClanTaxManager {
         if (!Double.isFinite(taxAmount)
                 || taxAmount < 0
                 || intervalDays < 1) {
+
             plugin.getLogger().severe(
                     "Invalid clan tax configuration!"
             );
             return;
         }
 
-        long intervalMillis =
-                intervalDays * 86400000L;
+        long intervalMillis = intervalDays * 86400000L;
 
         try {
-            List<DueClan> dueClans = getDueClans(
-                    System.currentTimeMillis()
-            );
+            List<DueClan> dueClans =
+                    getDueClans(System.currentTimeMillis());
 
             for (DueClan clan : dueClans) {
                 processClanTax(clan, taxAmount, intervalMillis);
             }
 
         } catch (SQLException exception) {
-            plugin.getLogger().log(
-                    Level.SEVERE,
-                    "Failed to process clan taxes!",
-                    exception
-            );
+            logError("Failed to process clan taxes", exception);
         }
     }
 
     private List<DueClan> getDueClans(long now)
             throws SQLException {
 
-        List<DueClan> clans = new ArrayList<>();
+        synchronized (databaseManager.getLock()) {
+            List<DueClan> clans = new ArrayList<>();
 
-        String sql = """
-                SELECT id, name, bank, tax_due_at
-                FROM clans
-                WHERE tax_due_at <= ?
-                ORDER BY tax_due_at ASC
-                """;
+            String sql = """
+                    SELECT id, name, bank, tax_due_at
+                    FROM clans
+                    WHERE tax_due_at <= ?
+                    ORDER BY tax_due_at ASC
+                    """;
 
-        try (PreparedStatement statement =
-                     plugin.getDatabaseManager()
-                             .getConnection()
-                             .prepareStatement(sql)) {
+            try (PreparedStatement statement =
+                         databaseManager.getConnection()
+                                 .prepareStatement(sql)) {
 
-            statement.setLong(1, now);
+                statement.setLong(1, now);
 
-            try (ResultSet result = statement.executeQuery()) {
-                while (result.next()) {
-                    clans.add(new DueClan(
-                            result.getString("id"),
-                            result.getString("name"),
-                            result.getDouble("bank"),
-                            result.getLong("tax_due_at")
-                    ));
+                try (ResultSet result = statement.executeQuery()) {
+                    while (result.next()) {
+                        clans.add(new DueClan(
+                                result.getString("id"),
+                                result.getString("name"),
+                                result.getDouble("bank"),
+                                result.getLong("tax_due_at")
+                        ));
+                    }
                 }
             }
-        }
 
-        return clans;
+            return clans;
+        }
     }
 
     private void processClanTax(
@@ -112,172 +115,179 @@ public final class ClanTaxManager {
             double taxAmount,
             long intervalMillis
     ) {
-
-        Connection connection =
-                plugin.getDatabaseManager().getConnection();
-
-        boolean oldAutoCommit;
-
-        try {
-            oldAutoCommit = connection.getAutoCommit();
-        } catch (SQLException exception) {
-            logError("Cannot read transaction state", exception);
-            return;
-        }
-
         List<UUID> affectedMembers = new ArrayList<>();
+
         int payments = 0;
         boolean disbanded = false;
+        boolean failed = false;
 
-        try {
-            connection.setAutoCommit(false);
+        synchronized (databaseManager.getLock()) {
+            Connection connection = databaseManager.getConnection();
 
-            long now = System.currentTimeMillis();
+            boolean oldAutoCommit;
 
-            double currentBank;
-            long currentDue;
-
-            try (PreparedStatement statement =
-                         connection.prepareStatement("""
-                    SELECT bank, tax_due_at
-                    FROM clans
-                    WHERE id = ?
-                    """)) {
-
-                statement.setString(1, clan.id());
-
-                try (ResultSet result = statement.executeQuery()) {
-                    if (!result.next()) {
-                        connection.rollback();
-                        return;
-                    }
-
-                    currentBank = result.getDouble("bank");
-                    currentDue = result.getLong("tax_due_at");
-                }
-            }
-
-            if (currentDue > now) {
-                connection.rollback();
+            try {
+                oldAutoCommit = connection.getAutoCommit();
+            } catch (SQLException exception) {
+                logError("Cannot read transaction state", exception);
                 return;
             }
 
-            while (currentDue <= now) {
+            try {
+                connection.setAutoCommit(false);
 
-                if (currentBank + 0.000001 < taxAmount) {
+                long now = System.currentTimeMillis();
 
-                    if (!plugin.getConfig().getBoolean(
-                            "clan.tax.disband-if-unpaid", true)) {
+                double currentBank;
+                long currentDue;
 
-                        currentDue = now + intervalMillis;
-                        break;
-                    }
-
-                    affectedMembers = getMembers(
-                            connection,
-                            clan.id()
-                    );
-
-                    try (PreparedStatement wars =
-                                 connection.prepareStatement("""
-                            DELETE FROM clan_wars
-                            WHERE clan_a = ? OR clan_b = ?
-                            """)) {
-
-                        wars.setString(1, clan.id());
-                        wars.setString(2, clan.id());
-                        wars.executeUpdate();
-                    }
-
-                    try (PreparedStatement delete =
-                                 connection.prepareStatement("""
-                            DELETE FROM clans WHERE id = ?
-                            """)) {
-
-                        delete.setString(1, clan.id());
-                        delete.executeUpdate();
-                    }
-
-                    disbanded = true;
-                    break;
-                }
-
-                currentBank -= taxAmount;
-                currentDue += intervalMillis;
-                payments++;
-            }
-
-            if (!disbanded) {
-                try (PreparedStatement update =
+                try (PreparedStatement statement =
                              connection.prepareStatement("""
-                        UPDATE clans
-                        SET bank = ?, tax_due_at = ?
+                        SELECT bank, tax_due_at
+                        FROM clans
                         WHERE id = ?
                         """)) {
 
-                    update.setDouble(1, currentBank);
-                    update.setLong(2, currentDue);
-                    update.setString(3, clan.id());
+                    statement.setString(1, clan.id());
 
-                    update.executeUpdate();
+                    try (ResultSet result = statement.executeQuery()) {
+                        if (!result.next()) {
+                            connection.rollback();
+                            return;
+                        }
+
+                        currentBank = result.getDouble("bank");
+                        currentDue = result.getLong("tax_due_at");
+                    }
                 }
 
-                if (payments > 0) {
-                    try (PreparedStatement history =
+                if (currentDue > now) {
+                    connection.rollback();
+                    return;
+                }
+
+                while (currentDue <= now) {
+
+                    if (currentBank + 0.000001 < taxAmount) {
+
+                        if (!plugin.getConfig().getBoolean(
+                                "clan.tax.disband-if-unpaid", true)) {
+
+                            currentDue = now + intervalMillis;
+                            break;
+                        }
+
+                        affectedMembers = getMembers(
+                                connection,
+                                clan.id()
+                        );
+
+                        try (PreparedStatement wars =
+                                     connection.prepareStatement("""
+                                DELETE FROM clan_wars
+                                WHERE clan_a = ? OR clan_b = ?
+                                """)) {
+
+                            wars.setString(1, clan.id());
+                            wars.setString(2, clan.id());
+                            wars.executeUpdate();
+                        }
+
+                        try (PreparedStatement delete =
+                                     connection.prepareStatement("""
+                                DELETE FROM clans
+                                WHERE id = ?
+                                """)) {
+
+                            delete.setString(1, clan.id());
+                            delete.executeUpdate();
+                        }
+
+                        disbanded = true;
+                        break;
+                    }
+
+                    currentBank -= taxAmount;
+                    currentDue += intervalMillis;
+                    payments++;
+                }
+
+                if (!disbanded) {
+                    try (PreparedStatement update =
                                  connection.prepareStatement("""
-                            INSERT INTO clan_transactions (
-                                clan_id,
-                                player_uuid,
-                                transaction_type,
-                                amount,
-                                balance_after,
-                                created_at
-                            )
-                            VALUES (?, ?, 'TAX', ?, ?, ?)
+                            UPDATE clans
+                            SET bank = ?, tax_due_at = ?
+                            WHERE id = ?
                             """)) {
 
-                        for (int i = 0; i < payments; i++) {
-                            history.setString(1, clan.id());
-                            history.setString(2, "SYSTEM");
-                            history.setDouble(3, taxAmount);
-                            history.setDouble(
-                                    4,
-                                    clan.bank() - taxAmount * (i + 1)
-                            );
-                            history.setLong(5, now);
+                        update.setDouble(1, currentBank);
+                        update.setLong(2, currentDue);
+                        update.setString(3, clan.id());
 
-                            history.executeUpdate();
+                        update.executeUpdate();
+                    }
+
+                    if (payments > 0) {
+                        try (PreparedStatement history =
+                                     connection.prepareStatement("""
+                                INSERT INTO clan_transactions (
+                                    clan_id,
+                                    player_uuid,
+                                    transaction_type,
+                                    amount,
+                                    balance_after,
+                                    created_at
+                                )
+                                VALUES (?, ?, 'TAX', ?, ?, ?)
+                                """)) {
+
+                            double historyBalance = clan.bank();
+
+                            for (int i = 0; i < payments; i++) {
+                                historyBalance -= taxAmount;
+
+                                history.setString(1, clan.id());
+                                history.setString(2, "SYSTEM");
+                                history.setDouble(3, taxAmount);
+                                history.setDouble(4, historyBalance);
+                                history.setLong(5, now);
+
+                                history.executeUpdate();
+                            }
                         }
                     }
                 }
-            }
 
-            connection.commit();
+                connection.commit();
 
-        } catch (SQLException exception) {
-
-            try {
-                connection.rollback();
-            } catch (SQLException rollbackException) {
-                exception.addSuppressed(rollbackException);
-            }
-
-            logError(
-                    "Tax processing failed for " + clan.name(),
-                    exception
-            );
-
-            return;
-
-        } finally {
-            try {
-                connection.setAutoCommit(oldAutoCommit);
             } catch (SQLException exception) {
+                try {
+                    connection.rollback();
+                } catch (SQLException rollbackException) {
+                    exception.addSuppressed(rollbackException);
+                }
+
                 logError(
-                        "Failed to restore database transaction",
+                        "Tax processing failed for " + clan.name(),
                         exception
                 );
+
+                failed = true;
+
+            } finally {
+                try {
+                    connection.setAutoCommit(oldAutoCommit);
+                } catch (SQLException exception) {
+                    logError(
+                            "Failed to restore database transaction",
+                            exception
+                    );
+                }
             }
+        }
+
+        if (failed) {
+            return;
         }
 
         if (disbanded) {
@@ -332,10 +342,14 @@ public final class ClanTaxManager {
 
     private void notifyClan(String clanId, String message) {
         try {
-            List<UUID> members = getMembers(
-                    plugin.getDatabaseManager().getConnection(),
-                    clanId
-            );
+            List<UUID> members;
+
+            synchronized (databaseManager.getLock()) {
+                members = getMembers(
+                        databaseManager.getConnection(),
+                        clanId
+                );
+            }
 
             notifyMembers(members, message);
 
@@ -353,11 +367,10 @@ public final class ClanTaxManager {
                 "&8[&bVortexClan&8]"
         );
 
-        String formatted = org.bukkit.ChatColor
-                .translateAlternateColorCodes(
-                        '&',
-                        prefix + " " + message
-                );
+        String formatted = ChatColor.translateAlternateColorCodes(
+                '&',
+                prefix + " " + message
+        );
 
         for (UUID uuid : members) {
             Player player = Bukkit.getPlayer(uuid);

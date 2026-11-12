@@ -2,6 +2,7 @@
 package id.vortexclan.commands;
 
 import id.vortexclan.VortexClan;
+import id.vortexclan.command.ClanWarCommand;
 import id.vortexclan.clan.Clan;
 import id.vortexclan.clan.ClanManager;
 import id.vortexclan.clan.ClanMemberManager;
@@ -27,9 +28,14 @@ import java.util.List;
 public final class ClanCommand implements CommandExecutor, TabCompleter {
 
     private final VortexClan plugin;
+    private final ClanWarCommand warCommand;
 
     public ClanCommand(VortexClan plugin) {
         this.plugin = plugin;
+        this.warCommand = new ClanWarCommand(
+                plugin,
+                plugin.getClanWarManager()
+        );
     }
 
     @Override
@@ -200,6 +206,59 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
                 }
             }
 
+            case "alliance", "ally" -> {
+                if (!(sender instanceof Player player)) {
+                    send(sender, "&cPlayer only!");
+                    return true;
+                }
+
+                plugin.getClanAllianceGUI().open(player);
+            }
+
+            case "alliancechat", "ac" -> {
+                if (!(sender instanceof Player player)) {
+                    send(sender, "&cPlayer only!");
+                    return true;
+                }
+
+                toggleAllianceChat(player);
+            }
+
+            case "war" -> {
+                if (args.length >= 2
+                        && args[1].equalsIgnoreCase("gui")) {
+
+                    if (!(sender instanceof Player player)) {
+                        send(sender, "&cPlayer only!");
+                        return true;
+                    }
+
+                    plugin.getClanWarGUI().open(player);
+                } else {
+                    warCommand.execute(sender, args);
+                }
+            }
+
+            case "warleaderboard", "wartop" -> {
+                if (!(sender instanceof Player player)) {
+                    send(sender, "&cPlayer only!");
+                    return true;
+                }
+
+                String sort = args.length >= 2
+                        ? args[1].toLowerCase()
+                        : "wins";
+
+                if (!List.of("wins", "losses", "kills").contains(sort)) {
+                    send(player, "&cKategori tidak valid!");
+                    send(player,
+                            "&7Gunakan: &b/clan warleaderboard <wins|losses|kills>");
+                    return true;
+                }
+
+                plugin.getClanWarLeaderboardGUI().open(player, sort);
+            }
+
             case "reload" -> {
                 if (!sender.hasPermission("vortexclan.admin.reload")) {
                     message(sender, "no-permission");
@@ -222,7 +281,6 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
 
         switch (result) {
             case SUCCESS -> {
-                // Pesan sukses sudah dikirim oleh ClanHomeManager.
             }
 
             case NOT_IN_CLAN ->
@@ -252,7 +310,6 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
 
         switch (result) {
             case SUCCESS, TELEPORT_STARTED -> {
-                // Pesan teleport sudah ditangani oleh ClanHomeManager.
             }
 
             case NOT_IN_CLAN ->
@@ -265,7 +322,6 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
                     send(player, "&cWorld Clan Home tidak ditemukan!");
 
             case COOLDOWN -> {
-                // Pesan cooldown sudah dikirim oleh ClanHomeManager.
             }
 
             case DISABLED ->
@@ -286,6 +342,36 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
         if (result == ClanChatManager.Result.NOT_IN_CLAN) {
             message(player, "no-clan");
         } else if (result == ClanChatManager.Result.DATABASE_ERROR) {
+            send(player, "&cGagal memeriksa data clan!");
+        }
+    }
+
+    private void toggleAllianceChat(Player player) {
+        try {
+            Clan clan = plugin.getClanManager()
+                    .getClanByPlayer(player.getUniqueId());
+
+            if (clan == null) {
+                message(player, "no-clan");
+                return;
+            }
+
+            boolean enabled = plugin.getClanAllianceChatManager()
+                    .toggle(player.getUniqueId());
+
+            if (enabled) {
+                send(player,
+                        "&aAlliance Chat diaktifkan. Pesanmu akan dikirim ke clan sekutu.");
+            } else {
+                send(player, "&cAlliance Chat dinonaktifkan.");
+            }
+
+        } catch (SQLException exception) {
+            plugin.getLogger().severe(
+                    "Gagal memeriksa clan untuk Alliance Chat: "
+                            + exception.getMessage()
+            );
+
             send(player, "&cGagal memeriksa data clan!");
         }
     }
@@ -332,11 +418,10 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
                     message(player, "no-clan");
 
             case NO_PERMISSION ->
-                    send(player,
-                            "&cHanya Leader dan Co-Leader yang bisa mengubah Clan PvP!");
+                    message(player, "no-permission");
 
             case DATABASE_ERROR ->
-                    send(player, "&cGagal mengubah status Clan PvP!");
+                    send(player, "&cGagal mengubah pengaturan PvP!");
         }
     }
 
@@ -358,6 +443,7 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
                     send(online, text);
                 }
             }
+
         } catch (SQLException exception) {
             plugin.getLogger().severe(
                     "Gagal mengirim notifikasi Clan PvP: "
@@ -439,6 +525,7 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
                 case DATABASE_ERROR ->
                         send(player, "&cGagal menyimpan data clan!");
             }
+
         } catch (Exception exception) {
             plugin.getLogger().severe(
                     "Create clan error: " + exception.getMessage()
@@ -513,6 +600,7 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
                         notifyClan(clan, "&b" + player.getName()
                                 + " &atelah bergabung dengan clan!");
                     }
+
                 } catch (SQLException exception) {
                     plugin.getLogger().severe(exception.getMessage());
                 }
@@ -597,6 +685,7 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
         try {
             clan = plugin.getClanManager()
                     .getClanByPlayer(player.getUniqueId());
+
         } catch (SQLException exception) {
             send(player, "&cGagal mengambil data clan!");
             return;
@@ -616,14 +705,19 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
             send(player, "&aKamu berhasil keluar dari clan!");
             plugin.getClanChatManager().disable(player);
 
+            plugin.getClanAllianceChatManager()
+                    .disable(player.getUniqueId());
+
             notifyClan(clan, "&c" + player.getName()
                     + " &7telah keluar dari clan!");
 
         } else if (result ==
                 ClanMemberManager.Result.LEADER_CANNOT_LEAVE) {
+
             send(player, "&cLeader tidak bisa keluar begitu saja!");
             send(player,
                     "&7Transfer kepemimpinan atau bubarkan clan.");
+
         } else {
             send(player, "&cGagal keluar dari clan!");
         }
@@ -668,6 +762,10 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
             send(player, "&7Clan Chat: "
                     + (plugin.getClanChatManager().isEnabled(player)
                     ? "&aON" : "&cOFF"));
+            send(player, "&7Alliance Chat: "
+                    + (plugin.getClanAllianceChatManager()
+                    .isEnabled(player.getUniqueId())
+                    ? "&aON" : "&cOFF"));
             send(player, "&8&m------------------------------");
 
         } catch (SQLException exception) {
@@ -686,6 +784,11 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
         send(player, "&7/clan leaderboard &8- &fRanking clan");
         send(player, "&7/clan pvp &8- &fToggle Clan PvP");
         send(player, "&7/clan chat &8- &fToggle Clan Chat");
+        send(player, "&7/clan alliance &8- &fMenu aliansi clan");
+        send(player, "&7/clan alliancechat &8- &fToggle Alliance Chat");
+        send(player, "&7/clan war &8- &fClan War commands");
+        send(player, "&7/clan war gui &8- &fMenu Clan War");
+        send(player, "&7/clan warleaderboard &8- &fRanking Clan War");
         send(player, "&7/cc <pesan> &8- &fKirim pesan clan");
         send(player, "&8&m------------------------------");
     }
@@ -701,6 +804,7 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
                     send(online, text);
                 }
             }
+
         } catch (SQLException exception) {
             plugin.getLogger().severe(exception.getMessage());
         }
@@ -725,6 +829,13 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
         send(sender, "&b/cc <pesan> &7- Shortcut Clan Chat");
         send(sender, "&b/clan leaderboard &7- Clan leaderboard");
         send(sender, "&b/clan top <level|wins|bank> &7- Ranking category");
+        send(sender, "&b/clan alliance &7- Buka menu aliansi");
+        send(sender, "&b/clan alliancechat &7- Toggle Alliance Chat");
+        send(sender, "&b/clan war challenge <clan> &7- Tantang clan");
+        send(sender, "&b/clan war accept|deny &7- Kelola tantangan");
+        send(sender, "&b/clan war status &7- Status perang");
+        send(sender, "&b/clan war gui &7- Menu Clan War");
+        send(sender, "&b/clan warleaderboard <wins|losses|kills> &7- Ranking War");
         send(sender, "&b/clan reload &7- Reload config");
         send(sender, "&8&m------------------------------");
     }
@@ -778,9 +889,29 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
             suggestions.add("chat");
             suggestions.add("leaderboard");
             suggestions.add("top");
+            suggestions.add("alliance");
+            suggestions.add("alliancechat");
+            suggestions.add("war");
+            suggestions.add("warleaderboard");
             suggestions.add("reload");
 
         } else if (args.length == 2) {
+
+            if (args[0].equalsIgnoreCase("war")
+                    && sender instanceof Player player) {
+                suggestions.addAll(
+                        warCommand.tabComplete(player, args)
+                );
+                suggestions.add("gui");
+            }
+
+            if (args[0].equalsIgnoreCase("warleaderboard")
+                    || args[0].equalsIgnoreCase("wartop")) {
+                suggestions.add("wins");
+                suggestions.add("losses");
+                suggestions.add("kills");
+            }
+
             if (args[0].equalsIgnoreCase("top")) {
                 suggestions.add("level");
                 suggestions.add("wins");
@@ -794,8 +925,17 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
                 }
             }
 
+        } else if (args.length >= 3
+                && args[0].equalsIgnoreCase("war")
+                && sender instanceof Player player) {
+
+            suggestions.addAll(
+                    warCommand.tabComplete(player, args)
+            );
+
         } else if (args.length == 3
                 && args[0].equalsIgnoreCase("create")) {
+
             suggestions.add("<tag>");
         }
 

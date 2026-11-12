@@ -2,6 +2,7 @@
 package id.vortexclan.clan;
 
 import id.vortexclan.VortexClan;
+import id.vortexclan.database.DatabaseManager;
 
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -149,7 +150,6 @@ public class ClanDescriptionManager {
                 try (ResultSet result = statement.executeQuery()) {
                     if (result.next()) {
                         String description = result.getString("description");
-
                         return description == null ? "" : description;
                     }
                 }

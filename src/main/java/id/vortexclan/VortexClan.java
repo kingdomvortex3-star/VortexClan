@@ -70,7 +70,6 @@ public final class VortexClan extends JavaPlugin {
     @Override
     public void onEnable() {
         instance = this;
-
         saveDefaultConfig();
 
         try {
@@ -79,7 +78,6 @@ public final class VortexClan extends JavaPlugin {
             registerCommands();
 
             clanWarRecoveryManager.recover();
-
             startTaxTask();
 
             getLogger().info("--------------------------------");
@@ -93,7 +91,6 @@ public final class VortexClan extends JavaPlugin {
         } catch (Exception exception) {
             getLogger().severe("Gagal mengaktifkan VortexClan!");
             exception.printStackTrace();
-
             Bukkit.getPluginManager().disablePlugin(this);
         }
     }
@@ -130,7 +127,6 @@ public final class VortexClan extends JavaPlugin {
         }
 
         instance = null;
-
         getLogger().info("VortexClan berhasil dinonaktifkan!");
     }
 
@@ -167,8 +163,7 @@ public final class VortexClan extends JavaPlugin {
 
         clanLevelManager = new ClanLevelManager(
                 this,
-                databaseManager,
-                clanManager
+                databaseManager
         );
 
         clanLeaderboardManager = new ClanLeaderboardManager(

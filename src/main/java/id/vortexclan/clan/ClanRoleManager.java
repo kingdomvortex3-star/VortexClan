@@ -2,6 +2,7 @@
 package id.vortexclan.clan;
 
 import id.vortexclan.VortexClan;
+import id.vortexclan.database.DatabaseManager;
 
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -55,7 +56,7 @@ public class ClanRoleManager {
         }
 
         try {
-            if (!clanManager.isLeader(executorUuid)) {
+            if (!clanManager.isLeader(executorUuid, clanId)) {
                 return Result.NO_PERMISSION;
             }
         } catch (SQLException exception) {
@@ -105,7 +106,7 @@ public class ClanRoleManager {
         }
 
         try {
-            if (!clanManager.isLeader(executorUuid)) {
+            if (!clanManager.isLeader(executorUuid, clanId)) {
                 return Result.NO_PERMISSION;
             }
         } catch (SQLException exception) {

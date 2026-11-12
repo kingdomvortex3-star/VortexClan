@@ -12,6 +12,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
@@ -33,6 +34,7 @@ public class ClanBankTransactionGUI implements Listener {
     private static final int PAGE_SIZE = 45;
 
     private final VortexClan plugin;
+
     private final DecimalFormat moneyFormat =
             new DecimalFormat("#,##0.##");
 
@@ -71,12 +73,16 @@ public class ClanBankTransactionGUI implements Listener {
         String clanId = String.valueOf(clan.getId());
 
         int totalTransactions = getTotalTransactions(clanId);
+
         int totalPages = Math.max(
                 1,
                 (int) Math.ceil(totalTransactions / (double) PAGE_SIZE)
         );
 
-        int currentPage = Math.max(0, Math.min(page, totalPages - 1));
+        int currentPage = Math.max(
+                0,
+                Math.min(page, totalPages - 1)
+        );
 
         TransactionHolder holder = new TransactionHolder(
                 clanId,
@@ -178,7 +184,9 @@ public class ClanBankTransactionGUI implements Listener {
                 transaction.type()
         );
 
-        String playerName = getPlayerName(transaction.playerUuid());
+        String playerName = getPlayerName(
+                transaction.playerUuid()
+        );
 
         return createItem(
                 material,
@@ -190,7 +198,9 @@ public class ClanBankTransactionGUI implements Listener {
                         "&7Saldo setelah transaksi: &e$"
                                 + formatMoney(transaction.balanceAfter()),
                         "",
-                        "&7Waktu: &f" + formatDate(transaction.createdAt()),
+                        "&7Waktu: &f" + formatDate(
+                                transaction.createdAt()
+                        ),
                         "",
                         "&8Transaction ID: " + transaction.id()
                 )
@@ -218,8 +228,10 @@ public class ClanBankTransactionGUI implements Listener {
                 """;
 
         synchronized (plugin.getDatabaseManager().getLock()) {
-            try (PreparedStatement statement = plugin.getDatabaseManager()
-                    .getConnection().prepareStatement(sql)) {
+            try (PreparedStatement statement =
+                         plugin.getDatabaseManager()
+                                 .getConnection()
+                                 .prepareStatement(sql)) {
 
                 statement.setString(1, clanId);
                 statement.setInt(2, PAGE_SIZE);
@@ -257,8 +269,10 @@ public class ClanBankTransactionGUI implements Listener {
                 """;
 
         synchronized (plugin.getDatabaseManager().getLock()) {
-            try (PreparedStatement statement = plugin.getDatabaseManager()
-                    .getConnection().prepareStatement(sql)) {
+            try (PreparedStatement statement =
+                         plugin.getDatabaseManager()
+                                 .getConnection()
+                                 .prepareStatement(sql)) {
 
                 statement.setString(1, clanId);
 
@@ -277,7 +291,8 @@ public class ClanBankTransactionGUI implements Listener {
     }
 
     private String getPlayerName(String playerUuid) {
-        if (playerUuid == null || playerUuid.equalsIgnoreCase("SYSTEM")) {
+        if (playerUuid == null
+                || playerUuid.equalsIgnoreCase("SYSTEM")) {
             return "System";
         }
 
@@ -289,6 +304,7 @@ public class ClanBankTransactionGUI implements Listener {
             String name = offlinePlayer.getName();
 
             return name != null ? name : "Unknown";
+
         } catch (IllegalArgumentException exception) {
             return "Unknown";
         }
@@ -323,7 +339,9 @@ public class ClanBankTransactionGUI implements Listener {
 
     private String formatDate(long timestamp) {
         try {
-            return dateFormat.format(Instant.ofEpochSecond(timestamp));
+            return dateFormat.format(
+                    Instant.ofEpochSecond(timestamp)
+            );
         } catch (Exception exception) {
             return "Unknown";
         }
@@ -399,15 +417,38 @@ public class ClanBankTransactionGUI implements Listener {
                 player.closeInventory();
 
                 Bukkit.getScheduler().runTask(plugin, () -> {
-                    new ClanBankGUI(plugin).open(player);
+                    if (player.isOnline()) {
+                        plugin.getClanBankGUI().open(player);
+                    }
                 });
             }
 
-            case 53 -> open(player, holder.page() + 1);
+            case 53 -> {
+                if (holder.page() + 1 < getTotalPages(holder.clanId())) {
+                    open(player, holder.page() + 1);
+                }
+            }
 
             default -> {
             }
         }
+    }
+
+    @EventHandler
+    public void onInventoryDrag(InventoryDragEvent event) {
+        if (event.getView().getTopInventory().getHolder()
+                instanceof TransactionHolder) {
+            event.setCancelled(true);
+        }
+    }
+
+    private int getTotalPages(String clanId) {
+        int total = getTotalTransactions(clanId);
+
+        return Math.max(
+                1,
+                (int) Math.ceil(total / (double) PAGE_SIZE)
+        );
     }
 
     private String color(String text) {

@@ -189,36 +189,35 @@ public final class ClanWarCommand {
             clan = plugin.getClanManager()
                     .getClanByPlayer(player.getUniqueId());
 
+            if (clan == null) {
+                send(player, "&cKamu belum memiliki clan.");
+                return;
+            }
+
+            ClanWarManager.WarData war =
+                    warManager.getActiveWar(clan.getId());
+
+            send(player, "&8&m--------------------------------");
+            send(player, "&b&lVORTEX CLAN WAR");
+            send(player, "");
+
+            if (war == null) {
+                send(player, "&7Status: &cTidak ada perang aktif.");
+            } else {
+                send(player, "&7Status: &aPerang berlangsung");
+                send(player, "&7Clan A: &f" + war.clanA());
+                send(player, "&7Clan B: &f" + war.clanB());
+                send(player, "");
+                send(player, "&7Kill Clan A: &a" + war.killsA());
+                send(player, "&7Kill Clan B: &c" + war.killsB());
+            }
+
+            send(player, "");
+            send(player, "&8&m--------------------------------");
+
         } catch (SQLException exception) {
             databaseError(player, exception);
-            return;
         }
-
-        if (clan == null) {
-            send(player, "&cKamu belum memiliki clan.");
-            return;
-        }
-
-        ClanWarManager.WarData war =
-                warManager.getActiveWar(clan.getId());
-
-        send(player, "&8&m--------------------------------");
-        send(player, "&b&lVORTEX CLAN WAR");
-        send(player, "");
-
-        if (war == null) {
-            send(player, "&7Status: &cTidak ada perang aktif.");
-        } else {
-            send(player, "&7Status: &aPerang berlangsung");
-            send(player, "&7Clan A: &f" + war.clanA());
-            send(player, "&7Clan B: &f" + war.clanB());
-            send(player, "");
-            send(player, "&7Kill Clan A: &a" + war.killsA());
-            send(player, "&7Kill Clan B: &c" + war.killsB());
-        }
-
-        send(player, "");
-        send(player, "&8&m--------------------------------");
     }
 
     private void sendHelp(Player player) {

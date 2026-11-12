@@ -5,12 +5,14 @@ import id.vortexclan.clan.ClanAllianceChatManager;
 import id.vortexclan.clan.ClanAllianceManager;
 import id.vortexclan.clan.ClanBankManager;
 import id.vortexclan.clan.ClanChatManager;
+import id.vortexclan.clan.ClanDescriptionManager;
 import id.vortexclan.clan.ClanHomeManager;
 import id.vortexclan.clan.ClanLeaderboardManager;
 import id.vortexclan.clan.ClanLevelManager;
 import id.vortexclan.clan.ClanManager;
 import id.vortexclan.clan.ClanMemberManager;
 import id.vortexclan.clan.ClanPvPManager;
+import id.vortexclan.clan.ClanRoleManager;
 import id.vortexclan.clan.ClanTaxManager;
 import id.vortexclan.clan.ClanWarLeaderboardManager;
 import id.vortexclan.clan.ClanWarManager;
@@ -23,7 +25,16 @@ import id.vortexclan.economy.VaultManager;
 import id.vortexclan.gui.ClanAllianceGUI;
 import id.vortexclan.gui.ClanBankGUI;
 import id.vortexclan.gui.ClanBankTransactionGUI;
+import id.vortexclan.gui.ClanDescriptionGUI;
+import id.vortexclan.gui.ClanInfoGUI;
+import id.vortexclan.gui.ClanInviteGUI;
 import id.vortexclan.gui.ClanLeaderboardGUI;
+import id.vortexclan.gui.ClanLevelGUI;
+import id.vortexclan.gui.ClanMainGUI;
+import id.vortexclan.gui.ClanMemberGUI;
+import id.vortexclan.gui.ClanMemberManagementGUI;
+import id.vortexclan.gui.ClanSettingsGUI;
+import id.vortexclan.gui.ClanTopGUI;
 import id.vortexclan.gui.ClanWarGUI;
 import id.vortexclan.gui.ClanWarLeaderboardGUI;
 
@@ -56,6 +67,8 @@ public final class VortexClan extends JavaPlugin {
     private ClanPvPManager clanPvPManager;
     private ClanChatManager clanChatManager;
     private ClanHomeManager clanHomeManager;
+    private ClanDescriptionManager clanDescriptionManager;
+    private ClanRoleManager clanRoleManager;
 
     private ClanAllianceManager clanAllianceManager;
     private ClanAllianceChatManager clanAllianceChatManager;
@@ -64,10 +77,19 @@ public final class VortexClan extends JavaPlugin {
     private ClanWarRecoveryManager clanWarRecoveryManager;
     private ClanWarLeaderboardManager clanWarLeaderboardManager;
 
-    private ClanLeaderboardGUI clanLeaderboardGUI;
     private ClanAllianceGUI clanAllianceGUI;
     private ClanBankGUI clanBankGUI;
     private ClanBankTransactionGUI clanBankTransactionGUI;
+    private ClanDescriptionGUI clanDescriptionGUI;
+    private ClanInfoGUI clanInfoGUI;
+    private ClanInviteGUI clanInviteGUI;
+    private ClanLeaderboardGUI clanLeaderboardGUI;
+    private ClanLevelGUI clanLevelGUI;
+    private ClanMainGUI clanMainGUI;
+    private ClanMemberGUI clanMemberGUI;
+    private ClanMemberManagementGUI clanMemberManagementGUI;
+    private ClanSettingsGUI clanSettingsGUI;
+    private ClanTopGUI clanTopGUI;
     private ClanWarGUI clanWarGUI;
     private ClanWarLeaderboardGUI clanWarLeaderboardGUI;
 
@@ -81,6 +103,7 @@ public final class VortexClan extends JavaPlugin {
 
         try {
             initializeManagers();
+            initializeGUIs();
             registerListeners();
             registerCommands();
             registerPlaceholderExpansion();
@@ -94,7 +117,7 @@ public final class VortexClan extends JavaPlugin {
             getLogger().info("Clan Alliance: Enabled");
             getLogger().info("Clan War: Enabled");
             getLogger().info("Clan Bank: Enabled");
-            getLogger().info("Clan Leaderboard: Enabled");
+            getLogger().info("Clan GUI: Registered");
             getLogger().info("PlaceholderAPI: "
                     + (placeholderExpansion != null
                     ? "Enabled" : "Disabled"));
@@ -132,6 +155,10 @@ public final class VortexClan extends JavaPlugin {
 
         if (clanBankGUI != null) {
             clanBankGUI.clearPendingInputs();
+        }
+
+        if (clanDescriptionGUI != null) {
+            clanDescriptionGUI.clearWaitingInputs();
         }
 
         if (clanHomeManager != null) {
@@ -202,6 +229,18 @@ public final class VortexClan extends JavaPlugin {
                 databaseManager
         );
 
+        clanDescriptionManager = new ClanDescriptionManager(
+                this,
+                databaseManager,
+                clanManager
+        );
+
+        clanRoleManager = new ClanRoleManager(
+                this,
+                databaseManager,
+                clanManager
+        );
+
         clanAllianceManager = new ClanAllianceManager(
                 this,
                 databaseManager,
@@ -227,12 +266,9 @@ public final class VortexClan extends JavaPlugin {
         clanWarLeaderboardManager = new ClanWarLeaderboardManager(
                 databaseManager
         );
+    }
 
-        clanLeaderboardGUI = new ClanLeaderboardGUI(
-                this,
-                clanLeaderboardManager
-        );
-
+    private void initializeGUIs() {
         clanAllianceGUI = new ClanAllianceGUI(
                 this,
                 clanAllianceManager
@@ -241,6 +277,35 @@ public final class VortexClan extends JavaPlugin {
         clanBankGUI = new ClanBankGUI(this);
 
         clanBankTransactionGUI = new ClanBankTransactionGUI(this);
+
+        clanDescriptionGUI = new ClanDescriptionGUI(
+                this,
+                clanDescriptionManager
+        );
+
+        clanInfoGUI = new ClanInfoGUI(this);
+
+        clanInviteGUI = new ClanInviteGUI(this);
+
+        clanLeaderboardGUI = new ClanLeaderboardGUI(
+                this,
+                clanLeaderboardManager
+        );
+
+        clanLevelGUI = new ClanLevelGUI(this);
+
+        clanMainGUI = new ClanMainGUI(this);
+
+        clanMemberGUI = new ClanMemberGUI(this);
+
+        clanMemberManagementGUI = new ClanMemberManagementGUI(
+                this,
+                clanRoleManager
+        );
+
+        clanSettingsGUI = new ClanSettingsGUI(this);
+
+        clanTopGUI = new ClanTopGUI(this);
 
         clanWarGUI = new ClanWarGUI(
                 this,
@@ -265,7 +330,7 @@ public final class VortexClan extends JavaPlugin {
 
         if (placeholderExpansion.register()) {
             getLogger().info(
-                    "PlaceholderAPI expansion berhasil didaftarkan: %vortexclan_%"
+                    "PlaceholderAPI expansion berhasil didaftarkan."
             );
         } else {
             placeholderExpansion = null;
@@ -277,31 +342,23 @@ public final class VortexClan extends JavaPlugin {
     }
 
     private void registerListeners() {
+        Bukkit.getPluginManager().registerEvents(clanAllianceGUI, this);
+        Bukkit.getPluginManager().registerEvents(clanBankGUI, this);
+        Bukkit.getPluginManager().registerEvents(clanBankTransactionGUI, this);
+        Bukkit.getPluginManager().registerEvents(clanDescriptionGUI, this);
+        Bukkit.getPluginManager().registerEvents(clanInfoGUI, this);
+        Bukkit.getPluginManager().registerEvents(clanInviteGUI, this);
+        Bukkit.getPluginManager().registerEvents(clanLeaderboardGUI, this);
+        Bukkit.getPluginManager().registerEvents(clanLevelGUI, this);
+        Bukkit.getPluginManager().registerEvents(clanMainGUI, this);
+        Bukkit.getPluginManager().registerEvents(clanMemberGUI, this);
         Bukkit.getPluginManager().registerEvents(
-                clanLeaderboardGUI,
+                clanMemberManagementGUI,
                 this
         );
-
-        Bukkit.getPluginManager().registerEvents(
-                clanAllianceGUI,
-                this
-        );
-
-        Bukkit.getPluginManager().registerEvents(
-                clanBankGUI,
-                this
-        );
-
-        Bukkit.getPluginManager().registerEvents(
-                clanBankTransactionGUI,
-                this
-        );
-
-        Bukkit.getPluginManager().registerEvents(
-                clanWarGUI,
-                this
-        );
-
+        Bukkit.getPluginManager().registerEvents(clanSettingsGUI, this);
+        Bukkit.getPluginManager().registerEvents(clanTopGUI, this);
+        Bukkit.getPluginManager().registerEvents(clanWarGUI, this);
         Bukkit.getPluginManager().registerEvents(
                 clanWarLeaderboardGUI,
                 this
@@ -438,6 +495,14 @@ public final class VortexClan extends JavaPlugin {
         return clanHomeManager;
     }
 
+    public ClanDescriptionManager getClanDescriptionManager() {
+        return clanDescriptionManager;
+    }
+
+    public ClanRoleManager getClanRoleManager() {
+        return clanRoleManager;
+    }
+
     public ClanAllianceManager getClanAllianceManager() {
         return clanAllianceManager;
     }
@@ -458,10 +523,6 @@ public final class VortexClan extends JavaPlugin {
         return clanWarLeaderboardManager;
     }
 
-    public ClanLeaderboardGUI getClanLeaderboardGUI() {
-        return clanLeaderboardGUI;
-    }
-
     public ClanAllianceGUI getClanAllianceGUI() {
         return clanAllianceGUI;
     }
@@ -472,6 +533,46 @@ public final class VortexClan extends JavaPlugin {
 
     public ClanBankTransactionGUI getClanBankTransactionGUI() {
         return clanBankTransactionGUI;
+    }
+
+    public ClanDescriptionGUI getClanDescriptionGUI() {
+        return clanDescriptionGUI;
+    }
+
+    public ClanInfoGUI getClanInfoGUI() {
+        return clanInfoGUI;
+    }
+
+    public ClanInviteGUI getClanInviteGUI() {
+        return clanInviteGUI;
+    }
+
+    public ClanLeaderboardGUI getClanLeaderboardGUI() {
+        return clanLeaderboardGUI;
+    }
+
+    public ClanLevelGUI getClanLevelGUI() {
+        return clanLevelGUI;
+    }
+
+    public ClanMainGUI getClanMainGUI() {
+        return clanMainGUI;
+    }
+
+    public ClanMemberGUI getClanMemberGUI() {
+        return clanMemberGUI;
+    }
+
+    public ClanMemberManagementGUI getClanMemberManagementGUI() {
+        return clanMemberManagementGUI;
+    }
+
+    public ClanSettingsGUI getClanSettingsGUI() {
+        return clanSettingsGUI;
+    }
+
+    public ClanTopGUI getClanTopGUI() {
+        return clanTopGUI;
     }
 
     public ClanWarGUI getClanWarGUI() {

@@ -8,7 +8,6 @@ import id.vortexclan.clan.ClanWarManager;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
-import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -23,7 +22,6 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 
 public class ClanWarGUI implements Listener {
 
@@ -39,21 +37,47 @@ public class ClanWarGUI implements Listener {
         Clan clan;
 
         try {
-            clan = plugin.getClanManager().getClanByPlayer(player.getUniqueId());
+            clan = plugin.getClanManager()
+                    .getClanByPlayer(player.getUniqueId());
         } catch (SQLException exception) {
             player.sendMessage(color("&cGagal mengambil data clan."));
-            plugin.getLogger().severe("Gagal mengambil clan untuk ClanWarGUI: " + exception.getMessage());
+            plugin.getLogger().severe(
+                    "ClanWarGUI: " + exception.getMessage()
+            );
             return;
         }
 
         if (clan == null) {
-            player.sendMessage(color(plugin.getConfig().getString(
-                    "messages.no-clan", "&cKamu belum memiliki clan!"
-            )));
+            player.sendMessage(color(
+                    plugin.getConfig().getString(
+                            "messages.no-clan",
+                            "&cKamu belum memiliki clan!"
+                    )
+            ));
             return;
         }
 
+        String clanId = String.valueOf(clan.getId());
+
+        ClanWarManager.WarData activeWar;
+
+        try {
+            activeWar = warManager.getActiveWar(clanId);
+        } catch (SQLException exception) {
+            player.sendMessage(color(
+                    "&cGagal mengambil informasi Clan War."
+            ));
+            plugin.getLogger().severe(
+                    "Gagal mengambil perang aktif: "
+                            + exception.getMessage()
+            );
+            return;
+        }
+
+        PendingWar pendingWar = getPendingWar(clanId);
+
         WarHolder holder = new WarHolder();
+
         Inventory inventory = Bukkit.createInventory(
                 holder,
                 27,
@@ -63,8 +87,6 @@ public class ClanWarGUI implements Listener {
         holder.setInventory(inventory);
 
         fill(inventory);
-
-        ClanWarManager.WarData activeWar = warManager.getActiveWar(String.valueOf(clan.getId()));
 
         if (activeWar != null) {
             setItem(
@@ -98,8 +120,6 @@ public class ClanWarGUI implements Listener {
                     )
             );
         }
-
-        PendingWar pendingWar = getPendingWar(String.valueOf(clan.getId()));
 
         if (pendingWar != null) {
             setItem(
@@ -168,14 +188,16 @@ public class ClanWarGUI implements Listener {
             return;
         }
 
-        if (!(event.getView().getTopInventory().getHolder() instanceof WarHolder)) {
+        if (!(event.getView().getTopInventory()
+                .getHolder() instanceof WarHolder)) {
             return;
         }
 
         event.setCancelled(true);
 
         if (event.getClickedInventory() == null
-                || event.getClickedInventory() != event.getView().getTopInventory()) {
+                || event.getClickedInventory()
+                != event.getView().getTopInventory()) {
             return;
         }
 
@@ -190,27 +212,37 @@ public class ClanWarGUI implements Listener {
             return;
         }
 
-        PendingWar pendingWar;
+        Clan clan;
 
         try {
-            Clan clan = plugin.getClanManager().getClanByPlayer(player.getUniqueId());
-
-            if (clan == null) {
-                player.closeInventory();
-                player.sendMessage(color("&cKamu tidak memiliki clan."));
-                return;
-            }
-
-            pendingWar = getPendingWar(String.valueOf(clan.getId()));
-
+            clan = plugin.getClanManager()
+                    .getClanByPlayer(player.getUniqueId());
         } catch (SQLException exception) {
-            player.sendMessage(color("&cGagal mengambil data clan."));
-            plugin.getLogger().severe("ClanWarGUI click error: " + exception.getMessage());
+            player.sendMessage(color(
+                    "&cGagal mengambil data clan."
+            ));
+            plugin.getLogger().severe(
+                    "ClanWarGUI click: " + exception.getMessage()
+            );
             return;
         }
 
+        if (clan == null) {
+            player.closeInventory();
+            player.sendMessage(color(
+                    "&cKamu tidak memiliki clan."
+            ));
+            return;
+        }
+
+        PendingWar pendingWar = getPendingWar(
+                String.valueOf(clan.getId())
+        );
+
         if (pendingWar == null) {
-            player.sendMessage(color("&cTidak ada tantangan Clan War."));
+            player.sendMessage(color(
+                    "&cTidak ada tantangan Clan War."
+            ));
             open(player);
             return;
         }
@@ -224,35 +256,51 @@ public class ClanWarGUI implements Listener {
         switch (result) {
             case CHALLENGE_SENT:
             case WAR_ACCEPTED:
-                player.sendMessage(color("&aTantangan Clan War berhasil diterima!"));
+                player.sendMessage(color(
+                        "&aTantangan Clan War berhasil diterima!"
+                ));
                 break;
 
             case WAR_DENIED:
-                player.sendMessage(color("&cTantangan Clan War ditolak."));
+                player.sendMessage(color(
+                        "&cTantangan Clan War ditolak."
+                ));
                 break;
 
             case NO_PERMISSION:
-                player.sendMessage(color("&cHanya Leader atau Co-Leader yang dapat melakukan ini."));
+                player.sendMessage(color(
+                        "&cHanya Leader atau Co-Leader yang dapat melakukan ini."
+                ));
                 break;
 
             case ALREADY_IN_WAR:
-                player.sendMessage(color("&cClan kamu sedang memiliki perang atau tantangan lain."));
+                player.sendMessage(color(
+                        "&cClan kamu sedang memiliki perang atau tantangan lain."
+                ));
                 break;
 
             case CHALLENGE_NOT_FOUND:
-                player.sendMessage(color("&cTantangan sudah tidak tersedia."));
+                player.sendMessage(color(
+                        "&cTantangan sudah tidak tersedia."
+                ));
                 break;
 
             case NOT_IN_CLAN:
-                player.sendMessage(color("&cKamu tidak tergabung dalam clan."));
+                player.sendMessage(color(
+                        "&cKamu tidak tergabung dalam clan."
+                ));
                 break;
 
             case DATABASE_ERROR:
-                player.sendMessage(color("&cTerjadi kesalahan database."));
+                player.sendMessage(color(
+                        "&cTerjadi kesalahan database."
+                ));
                 break;
 
             default:
-                player.sendMessage(color("&cAksi gagal: &f" + result.name()));
+                player.sendMessage(color(
+                        "&cAksi gagal: &f" + result.name()
+                ));
                 break;
         }
     }
@@ -269,8 +317,10 @@ public class ClanWarGUI implements Listener {
                 """;
 
         synchronized (plugin.getDatabaseManager().getLock()) {
-            try (PreparedStatement statement = plugin.getDatabaseManager()
-                    .getConnection().prepareStatement(sql)) {
+            try (PreparedStatement statement =
+                         plugin.getDatabaseManager()
+                                 .getConnection()
+                                 .prepareStatement(sql)) {
 
                 statement.setString(1, clanId);
 
@@ -284,7 +334,10 @@ public class ClanWarGUI implements Listener {
                 }
 
             } catch (SQLException exception) {
-                plugin.getLogger().severe("Gagal mengambil tantangan Clan War: " + exception.getMessage());
+                plugin.getLogger().severe(
+                        "Gagal mengambil tantangan Clan War: "
+                                + exception.getMessage()
+                );
             }
         }
 
@@ -310,7 +363,10 @@ public class ClanWarGUI implements Listener {
             String name,
             List<String> lore
     ) {
-        inventory.setItem(slot, createItem(material, name, lore));
+        inventory.setItem(
+                slot,
+                createItem(material, name, lore)
+        );
     }
 
     private ItemStack createItem(
@@ -325,6 +381,7 @@ public class ClanWarGUI implements Listener {
             meta.setDisplayName(color(name));
 
             List<String> coloredLore = new ArrayList<>();
+
             for (String line : lore) {
                 coloredLore.add(color(line));
             }

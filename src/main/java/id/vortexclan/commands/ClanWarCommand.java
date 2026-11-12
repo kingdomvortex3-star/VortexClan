@@ -1,5 +1,5 @@
 
-package id.vortexclan.command;
+package id.vortexclan.commands;
 
 import id.vortexclan.VortexClan;
 import id.vortexclan.clan.Clan;

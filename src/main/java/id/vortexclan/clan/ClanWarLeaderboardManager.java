@@ -9,7 +9,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
-public class ClanWarLeaderboardManager {
+public final class ClanWarLeaderboardManager {
 
     private final DatabaseManager databaseManager;
 
@@ -17,7 +17,10 @@ public class ClanWarLeaderboardManager {
         this.databaseManager = databaseManager;
     }
 
-    public List<WarLeaderboardEntry> getTop(String sortType, int limit) {
+    public List<WarLeaderboardEntry> getTop(
+            String sortType,
+            int limit
+    ) {
         return getTop(sortType, limit, 0);
     }
 
@@ -45,8 +48,9 @@ public class ClanWarLeaderboardManager {
                 """.formatted(orderBy);
 
         synchronized (databaseManager.getLock()) {
-            try (PreparedStatement statement = databaseManager
-                    .getConnection().prepareStatement(sql)) {
+            try (PreparedStatement statement =
+                         databaseManager.getConnection()
+                                 .prepareStatement(sql)) {
 
                 statement.setInt(1, safeLimit);
                 statement.setInt(2, safeOffset);
@@ -76,9 +80,13 @@ public class ClanWarLeaderboardManager {
     }
 
     public int getRank(String clanId, String sortType) {
+        if (clanId == null || clanId.isBlank()) {
+            return -1;
+        }
+
         String orderBy = getOrderBy(sortType);
 
-        if (orderBy == null || clanId == null) {
+        if (orderBy == null) {
             return -1;
         }
 
@@ -89,8 +97,9 @@ public class ClanWarLeaderboardManager {
                 """.formatted(orderBy);
 
         synchronized (databaseManager.getLock()) {
-            try (PreparedStatement statement = databaseManager
-                    .getConnection().prepareStatement(sql);
+            try (PreparedStatement statement =
+                         databaseManager.getConnection()
+                                 .prepareStatement(sql);
                  ResultSet result = statement.executeQuery()) {
 
                 int position = 1;
@@ -115,8 +124,9 @@ public class ClanWarLeaderboardManager {
         String sql = "SELECT COUNT(*) FROM clans";
 
         synchronized (databaseManager.getLock()) {
-            try (PreparedStatement statement = databaseManager
-                    .getConnection().prepareStatement(sql);
+            try (PreparedStatement statement =
+                         databaseManager.getConnection()
+                                 .prepareStatement(sql);
                  ResultSet result = statement.executeQuery()) {
 
                 return result.next() ? result.getInt(1) : 0;

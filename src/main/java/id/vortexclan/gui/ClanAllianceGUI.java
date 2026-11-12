@@ -5,6 +5,7 @@ import id.vortexclan.VortexClan;
 import id.vortexclan.clan.Clan;
 import id.vortexclan.clan.ClanAllianceManager;
 
+import io.papermc.paper.event.player.AsyncChatEvent;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 
 import org.bukkit.Bukkit;
@@ -15,13 +16,13 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryClickEvent;
-import org.bukkit.event.player.AsyncChatEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -482,7 +483,7 @@ public class ClanAllianceGUI implements Listener {
         if (meta != null) {
             meta.setDisplayName(color(name));
 
-            List<String> lines = new java.util.ArrayList<>();
+            List<String> lines = new ArrayList<>();
 
             for (String line : lore) {
                 lines.add(color(line));

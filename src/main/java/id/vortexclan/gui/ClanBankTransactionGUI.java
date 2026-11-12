@@ -76,7 +76,9 @@ public class ClanBankTransactionGUI implements Listener {
 
         int totalPages = Math.max(
                 1,
-                (int) Math.ceil(totalTransactions / (double) PAGE_SIZE)
+                (int) Math.ceil(
+                        totalTransactions / (double) PAGE_SIZE
+                )
         );
 
         int currentPage = Math.max(
@@ -96,7 +98,6 @@ public class ClanBankTransactionGUI implements Listener {
         );
 
         holder.setInventory(inventory);
-
         fillBackground(inventory);
 
         List<TransactionEntry> transactions = getTransactions(
@@ -340,7 +341,7 @@ public class ClanBankTransactionGUI implements Listener {
     private String formatDate(long timestamp) {
         try {
             return dateFormat.format(
-                    Instant.ofEpochSecond(timestamp)
+                    Instant.ofEpochMilli(timestamp)
             );
         } catch (Exception exception) {
             return "Unknown";
@@ -424,7 +425,8 @@ public class ClanBankTransactionGUI implements Listener {
             }
 
             case 53 -> {
-                if (holder.page() + 1 < getTotalPages(holder.clanId())) {
+                if (holder.page() + 1
+                        < getTotalPages(holder.clanId())) {
                     open(player, holder.page() + 1);
                 }
             }

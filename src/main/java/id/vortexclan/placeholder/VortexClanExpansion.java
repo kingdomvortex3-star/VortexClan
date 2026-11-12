@@ -3,6 +3,7 @@ package id.vortexclan.placeholder;
 
 import id.vortexclan.VortexClan;
 import id.vortexclan.clan.Clan;
+import id.vortexclan.clan.ClanLeaderboardManager.SortType;
 
 import me.clip.placeholderapi.expansion.PlaceholderExpansion;
 
@@ -19,14 +20,13 @@ import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class VortexClanExpansion extends PlaceholderExpansion {
+public final class VortexClanExpansion extends PlaceholderExpansion {
 
     private static final Pattern TOP_PATTERN = Pattern.compile(
             "^top_(name|tag|level|bank|wins|losses|kills|members)_(\\d+)$"
     );
 
     private final VortexClan plugin;
-    private final DecimalFormat moneyFormat = new DecimalFormat("#,##0.##");
 
     public VortexClanExpansion(VortexClan plugin) {
         this.plugin = plugin;
@@ -53,7 +53,10 @@ public class VortexClanExpansion extends PlaceholderExpansion {
     }
 
     @Override
-    public String onRequest(OfflinePlayer offlinePlayer, String params) {
+    public String onRequest(
+            OfflinePlayer offlinePlayer,
+            String params
+    ) {
         if (offlinePlayer == null || params == null) {
             return "";
         }
@@ -64,19 +67,28 @@ public class VortexClanExpansion extends PlaceholderExpansion {
         Matcher matcher = TOP_PATTERN.matcher(parameter);
 
         if (matcher.matches()) {
-            return getTopPlaceholder(
-                    matcher.group(1),
-                    Integer.parseInt(matcher.group(2))
-            );
+            try {
+                int position = Integer.parseInt(matcher.group(2));
+
+                return getTopPlaceholder(
+                        matcher.group(1),
+                        position
+                );
+
+            } catch (NumberFormatException exception) {
+                return "";
+            }
         }
 
         Clan clan;
 
         try {
             clan = plugin.getClanManager().getClanByPlayer(uuid);
+
         } catch (SQLException exception) {
             plugin.getLogger().warning(
-                    "PlaceholderAPI clan error: " + exception.getMessage()
+                    "PlaceholderAPI clan error: "
+                            + exception.getMessage()
             );
             return "";
         }
@@ -84,6 +96,8 @@ public class VortexClanExpansion extends PlaceholderExpansion {
         if (clan == null) {
             return getNoClanValue(parameter);
         }
+
+        String clanId = clan.getId();
 
         return switch (parameter) {
             case "name" -> clan.getName();
@@ -96,15 +110,12 @@ public class VortexClanExpansion extends PlaceholderExpansion {
             case "kills" -> String.valueOf(clan.getKills());
             case "pvp" -> clan.isPvpEnabled() ? "ON" : "OFF";
             case "role" -> getRole(uuid);
-            case "members" -> String.valueOf(getMemberCount(clan.getId()));
+            case "members" -> String.valueOf(getMemberCount(clanId));
             case "max_members" -> String.valueOf(
-                    plugin.getClanManager().getCapacity(clan.getId())
+                    plugin.getClanManager().getCapacity(clan.getLevel())
             );
-            case "online" -> String.valueOf(getOnlineMembers(clan.getId()));
-            case "rank" -> String.valueOf(
-                    plugin.getClanLeaderboardManager()
-                            .getClanRank(clan.getId(), "level")
-            );
+            case "online" -> String.valueOf(getOnlineMembers(clanId));
+            case "rank" -> getClanRank(clanId);
             case "tax_due" -> getTaxDue(clan.getTaxDueAt());
             default -> "";
         };
@@ -113,23 +124,39 @@ public class VortexClanExpansion extends PlaceholderExpansion {
     private String getNoClanValue(String parameter) {
         return switch (parameter) {
             case "name", "tag", "role" -> "None";
+
             case "level", "exp", "bank", "wins", "losses",
                  "kills", "members", "max_members", "online" -> "0";
+
             case "pvp" -> "OFF";
-            case "rank" -> "-";
-            case "tax_due" -> "-";
+            case "rank", "tax_due" -> "-";
+
             default -> "";
         };
     }
 
-    private String getTopPlaceholder(String type, int position) {
+    private String getClanRank(String clanId) {
+        try {
+            int rank = plugin.getClanLeaderboardManager()
+                    .getClanPosition(clanId, SortType.LEVEL);
+
+            return rank > 0 ? String.valueOf(rank) : "-";
+
+        } catch (SQLException exception) {
+            return "-";
+        }
+    }
+
+    private String getTopPlaceholder(
+            String type,
+            int position
+    ) {
         if (position < 1 || position > 1000) {
             return "";
         }
 
         String orderBy = switch (type) {
-            case "name" -> "name ASC";
-            case "tag" -> "name ASC";
+            case "name", "tag" -> "name ASC";
             case "level" -> "level DESC, exp DESC, name ASC";
             case "bank" -> "bank DESC, name ASC";
             case "wins" -> "wins DESC, kills DESC, name ASC";
@@ -163,8 +190,10 @@ public class VortexClanExpansion extends PlaceholderExpansion {
                 """.formatted(orderBy);
 
         synchronized (plugin.getDatabaseManager().getLock()) {
-            try (PreparedStatement statement = plugin.getDatabaseManager()
-                    .getConnection().prepareStatement(sql)) {
+            try (PreparedStatement statement =
+                         plugin.getDatabaseManager()
+                                 .getConnection()
+                                 .prepareStatement(sql)) {
 
                 statement.setInt(1, position - 1);
 
@@ -174,16 +203,32 @@ public class VortexClanExpansion extends PlaceholderExpansion {
                     }
 
                     return switch (type) {
-                        case "name" -> result.getString("name");
-                        case "tag" -> result.getString("tag");
-                        case "level" -> String.valueOf(result.getInt("level"));
-                        case "bank" -> formatMoney(result.getDouble("bank"));
-                        case "wins" -> String.valueOf(result.getInt("wins"));
-                        case "losses" -> String.valueOf(result.getInt("losses"));
-                        case "kills" -> String.valueOf(result.getInt("kills"));
-                        case "members" -> String.valueOf(
-                                result.getInt("member_count")
-                        );
+                        case "name" ->
+                                result.getString("name");
+
+                        case "tag" ->
+                                result.getString("tag");
+
+                        case "level" ->
+                                String.valueOf(result.getInt("level"));
+
+                        case "bank" ->
+                                formatMoney(result.getDouble("bank"));
+
+                        case "wins" ->
+                                String.valueOf(result.getInt("wins"));
+
+                        case "losses" ->
+                                String.valueOf(result.getInt("losses"));
+
+                        case "kills" ->
+                                String.valueOf(result.getInt("kills"));
+
+                        case "members" ->
+                                String.valueOf(
+                                        result.getInt("member_count")
+                                );
+
                         default -> "";
                     };
                 }
@@ -201,7 +246,8 @@ public class VortexClanExpansion extends PlaceholderExpansion {
 
     private String getRole(UUID uuid) {
         try {
-            String role = plugin.getClanManager().getMemberRole(uuid);
+            String role = plugin.getClanManager()
+                    .getMemberRole(uuid);
 
             if (role == null) {
                 return "None";
@@ -226,8 +272,10 @@ public class VortexClanExpansion extends PlaceholderExpansion {
                 """;
 
         synchronized (plugin.getDatabaseManager().getLock()) {
-            try (PreparedStatement statement = plugin.getDatabaseManager()
-                    .getConnection().prepareStatement(sql)) {
+            try (PreparedStatement statement =
+                         plugin.getDatabaseManager()
+                                 .getConnection()
+                                 .prepareStatement(sql)) {
 
                 statement.setString(1, clanId);
 
@@ -251,8 +299,10 @@ public class VortexClanExpansion extends PlaceholderExpansion {
         int online = 0;
 
         synchronized (plugin.getDatabaseManager().getLock()) {
-            try (PreparedStatement statement = plugin.getDatabaseManager()
-                    .getConnection().prepareStatement(sql)) {
+            try (PreparedStatement statement =
+                         plugin.getDatabaseManager()
+                                 .getConnection()
+                                 .prepareStatement(sql)) {
 
                 statement.setString(1, clanId);
 
@@ -261,7 +311,9 @@ public class VortexClanExpansion extends PlaceholderExpansion {
                         UUID uuid;
 
                         try {
-                            uuid = UUID.fromString(result.getString("uuid"));
+                            uuid = UUID.fromString(
+                                    result.getString("uuid")
+                            );
                         } catch (IllegalArgumentException exception) {
                             continue;
                         }
@@ -290,7 +342,8 @@ public class VortexClanExpansion extends PlaceholderExpansion {
             return "-";
         }
 
-        long remaining = timestamp - (System.currentTimeMillis() / 1000L);
+        long remaining =
+                timestamp - (System.currentTimeMillis() / 1000L);
 
         if (remaining <= 0) {
             return "Due";
@@ -311,7 +364,7 @@ public class VortexClanExpansion extends PlaceholderExpansion {
         return minutes + "m";
     }
 
-    private String formatMoney(double amount) {
-        return moneyFormat.format(amount);
+    private synchronized String formatMoney(double amount) {
+        return new DecimalFormat("#,##0.##").format(amount);
     }
 }

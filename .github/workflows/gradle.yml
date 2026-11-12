@@ -41,5 +41,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: VortexClan
-          path: build/libs/VortexClan.jar
+          path: build/libs/VortexClan-1.0.0.jar
           if-no-files-found: error

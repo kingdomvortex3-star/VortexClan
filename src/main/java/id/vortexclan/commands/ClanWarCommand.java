@@ -13,24 +13,29 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
-public class ClanWarCommand {
+public final class ClanWarCommand {
 
     private final VortexClan plugin;
     private final ClanWarManager warManager;
 
-    public ClanWarCommand(VortexClan plugin, ClanWarManager warManager) {
+    public ClanWarCommand(
+            VortexClan plugin,
+            ClanWarManager warManager
+    ) {
         this.plugin = plugin;
         this.warManager = warManager;
     }
 
     public boolean execute(CommandSender sender, String[] args) {
         if (!(sender instanceof Player player)) {
-            sender.sendMessage(color("&cCommand ini hanya dapat digunakan oleh player."));
+            sender.sendMessage(color(
+                    "&cCommand ini hanya dapat digunakan oleh player."
+            ));
             return true;
         }
 
         if (!plugin.getConfig().getBoolean("war.enabled", true)) {
-            player.sendMessage(color("&cSistem Clan War sedang dinonaktifkan."));
+            send(player, "&cSistem Clan War sedang dinonaktifkan.");
             return true;
         }
 
@@ -39,25 +44,20 @@ public class ClanWarCommand {
             return true;
         }
 
-        String subCommand = args[1].toLowerCase();
-
-        switch (subCommand) {
+        switch (args[1].toLowerCase()) {
             case "challenge" -> {
                 if (args.length < 3) {
-                    player.sendMessage(color("&cGunakan: &f/clan war challenge <nama-clan>"));
+                    send(player,
+                            "&cGunakan: &f/clan war challenge <nama-clan>");
                     return true;
                 }
 
-                String targetClan = joinArgs(args, 2);
-                challenge(player, targetClan);
+                challenge(player, joinArgs(args, 2));
             }
 
             case "accept" -> accept(player);
-
             case "deny" -> deny(player);
-
             case "status" -> status(player);
-
             default -> sendHelp(player);
         }
 
@@ -68,14 +68,16 @@ public class ClanWarCommand {
         Clan clan;
 
         try {
-            clan = plugin.getClanManager().getClanByPlayer(player.getUniqueId());
+            clan = plugin.getClanManager()
+                    .getClanByPlayer(player.getUniqueId());
+
         } catch (SQLException exception) {
             databaseError(player, exception);
             return;
         }
 
         if (clan == null) {
-            player.sendMessage(color("&cKamu belum memiliki clan."));
+            send(player, "&cKamu belum memiliki clan.");
             return;
         }
 
@@ -86,81 +88,97 @@ public class ClanWarCommand {
 
         switch (result) {
             case CHALLENGE_SENT ->
-                    player.sendMessage(color(
-                            "&aTantangan Clan War berhasil dikirim kepada &f" + targetClan + "&a!"
-                    ));
+                    send(player,
+                            "&aTantangan Clan War berhasil dikirim kepada &f"
+                                    + targetClan + "&a!");
 
             case NOT_IN_CLAN ->
-                    player.sendMessage(color("&cKamu belum memiliki clan."));
+                    send(player, "&cKamu belum memiliki clan.");
 
             case NO_PERMISSION ->
-                    player.sendMessage(color("&cHanya Leader atau Co-Leader yang dapat menantang clan."));
+                    send(player,
+                            "&cHanya Leader atau Co-Leader yang dapat menantang clan.");
 
             case CLAN_NOT_FOUND ->
-                    player.sendMessage(color("&cClan &f" + targetClan + " &ctidak ditemukan."));
+                    send(player,
+                            "&cClan &f" + targetClan + " &ctidak ditemukan.");
 
             case SAME_CLAN ->
-                    player.sendMessage(color("&cKamu tidak bisa menantang clan sendiri."));
+                    send(player,
+                            "&cKamu tidak bisa menantang clan sendiri.");
 
             case ALREADY_IN_WAR ->
-                    player.sendMessage(color("&cClan kamu atau clan tujuan sedang memiliki perang/tantangan lain."));
+                    send(player,
+                            "&cClan kamu atau clan tujuan sedang memiliki perang/tantangan lain.");
 
             case DATABASE_ERROR ->
-                    player.sendMessage(color("&cTerjadi kesalahan database."));
+                    send(player, "&cTerjadi kesalahan database.");
 
             default ->
-                    player.sendMessage(color("&cGagal mengirim tantangan: &f" + result.name()));
+                    send(player,
+                            "&cGagal mengirim tantangan: &f" + result.name());
         }
     }
 
     private void accept(Player player) {
-        ClanWarManager.Result result = warManager.accept(player.getUniqueId());
+        ClanWarManager.Result result =
+                warManager.accept(player.getUniqueId());
 
         switch (result) {
             case WAR_ACCEPTED ->
-                    player.sendMessage(color("&aTantangan Clan War berhasil diterima!"));
+                    send(player,
+                            "&aTantangan Clan War berhasil diterima!");
 
             case NOT_IN_CLAN ->
-                    player.sendMessage(color("&cKamu belum memiliki clan."));
+                    send(player, "&cKamu belum memiliki clan.");
 
             case NO_PERMISSION ->
-                    player.sendMessage(color("&cHanya Leader atau Co-Leader yang dapat menerima tantangan."));
+                    send(player,
+                            "&cHanya Leader atau Co-Leader yang dapat menerima tantangan.");
 
             case CHALLENGE_NOT_FOUND ->
-                    player.sendMessage(color("&cTidak ada tantangan Clan War yang menunggu."));
+                    send(player,
+                            "&cTidak ada tantangan Clan War yang menunggu.");
 
             case ALREADY_IN_WAR ->
-                    player.sendMessage(color("&cClan kamu sedang memiliki perang atau tantangan lain."));
+                    send(player,
+                            "&cClan kamu sedang memiliki perang atau tantangan lain.");
 
             case DATABASE_ERROR ->
-                    player.sendMessage(color("&cTerjadi kesalahan database."));
+                    send(player, "&cTerjadi kesalahan database.");
 
             default ->
-                    player.sendMessage(color("&cGagal menerima tantangan: &f" + result.name()));
+                    send(player,
+                            "&cGagal menerima tantangan: &f" + result.name());
         }
     }
 
     private void deny(Player player) {
-        ClanWarManager.Result result = warManager.deny(player.getUniqueId());
+        ClanWarManager.Result result =
+                warManager.deny(player.getUniqueId());
 
         switch (result) {
             case WAR_DENIED ->
-                    player.sendMessage(color("&cTantangan Clan War berhasil ditolak."));
+                    send(player,
+                            "&cTantangan Clan War berhasil ditolak.");
 
             case NOT_IN_CLAN ->
-                    player.sendMessage(color("&cKamu belum memiliki clan."));
+                    send(player, "&cKamu belum memiliki clan.");
 
             case NO_PERMISSION ->
-                    player.sendMessage(color("&cHanya Leader atau Co-Leader yang dapat menolak tantangan."));
+                    send(player,
+                            "&cHanya Leader atau Co-Leader yang dapat menolak tantangan.");
 
             case CHALLENGE_NOT_FOUND ->
-                    player.sendMessage(color("&cTidak ada tantangan Clan War yang menunggu."));
+                    send(player,
+                            "&cTidak ada tantangan Clan War yang menunggu.");
 
             case DATABASE_ERROR ->
-                    player.sendMessage(color("&cTerjadi kesalahan database."));
+                    send(player, "&cTerjadi kesalahan database.");
 
             default ->
-                    player.sendMessage(color("&cGagal menolak tantangan: &f" + result.name()));
+                    send(player,
+                            "&cGagal menolak tantangan: &f" + result.name());
         }
     }
 
@@ -168,50 +186,55 @@ public class ClanWarCommand {
         Clan clan;
 
         try {
-            clan = plugin.getClanManager().getClanByPlayer(player.getUniqueId());
+            clan = plugin.getClanManager()
+                    .getClanByPlayer(player.getUniqueId());
+
         } catch (SQLException exception) {
             databaseError(player, exception);
             return;
         }
 
         if (clan == null) {
-            player.sendMessage(color("&cKamu belum memiliki clan."));
+            send(player, "&cKamu belum memiliki clan.");
             return;
         }
 
-        ClanWarManager.WarData war = warManager.getActiveWar(
-                String.valueOf(clan.getId())
-        );
+        ClanWarManager.WarData war =
+                warManager.getActiveWar(clan.getId());
 
-        player.sendMessage(color("&8&m--------------------------------"));
-        player.sendMessage(color("&b&lVORTEX CLAN WAR"));
-        player.sendMessage("");
+        send(player, "&8&m--------------------------------");
+        send(player, "&b&lVORTEX CLAN WAR");
+        send(player, "");
 
         if (war == null) {
-            player.sendMessage(color("&7Status: &cTidak ada perang aktif."));
+            send(player, "&7Status: &cTidak ada perang aktif.");
         } else {
-            player.sendMessage(color("&7Status: &aPerang berlangsung"));
-            player.sendMessage(color("&7Clan A: &f" + war.clanA()));
-            player.sendMessage(color("&7Clan B: &f" + war.clanB()));
-            player.sendMessage("");
-            player.sendMessage(color("&7Kill Clan A: &a" + war.killsA()));
-            player.sendMessage(color("&7Kill Clan B: &c" + war.killsB()));
+            send(player, "&7Status: &aPerang berlangsung");
+            send(player, "&7Clan A: &f" + war.clanA());
+            send(player, "&7Clan B: &f" + war.clanB());
+            send(player, "");
+            send(player, "&7Kill Clan A: &a" + war.killsA());
+            send(player, "&7Kill Clan B: &c" + war.killsB());
         }
 
-        player.sendMessage("");
-        player.sendMessage(color("&8&m--------------------------------"));
+        send(player, "");
+        send(player, "&8&m--------------------------------");
     }
 
     private void sendHelp(Player player) {
-        player.sendMessage(color("&8&m--------------------------------"));
-        player.sendMessage(color("&b&lVORTEX CLAN WAR"));
-        player.sendMessage("");
-        player.sendMessage(color("&b/clan war challenge <clan> &7- Tantang clan"));
-        player.sendMessage(color("&b/clan war accept &7- Terima tantangan"));
-        player.sendMessage(color("&b/clan war deny &7- Tolak tantangan"));
-        player.sendMessage(color("&b/clan war status &7- Lihat status perang"));
-        player.sendMessage("");
-        player.sendMessage(color("&8&m--------------------------------"));
+        send(player, "&8&m--------------------------------");
+        send(player, "&b&lVORTEX CLAN WAR");
+        send(player, "");
+        send(player,
+                "&b/clan war challenge <clan> &7- Tantang clan");
+        send(player,
+                "&b/clan war accept &7- Terima tantangan");
+        send(player,
+                "&b/clan war deny &7- Tolak tantangan");
+        send(player,
+                "&b/clan war status &7- Lihat status perang");
+        send(player, "");
+        send(player, "&8&m--------------------------------");
     }
 
     public List<String> tabComplete(Player player, String[] args) {
@@ -222,7 +245,10 @@ public class ClanWarCommand {
             completions.add("accept");
             completions.add("deny");
             completions.add("status");
-        } else if (args.length == 3 && args[1].equalsIgnoreCase("challenge")) {
+
+        } else if (args.length == 3
+                && args[1].equalsIgnoreCase("challenge")) {
+
             String input = args[2].toLowerCase();
 
             try {
@@ -237,7 +263,10 @@ public class ClanWarCommand {
                     try (var statement = plugin.getDatabaseManager()
                             .getConnection().prepareStatement(sql)) {
 
-                        statement.setString(1, player.getUniqueId().toString());
+                        statement.setString(
+                                1,
+                                player.getUniqueId().toString()
+                        );
 
                         try (var result = statement.executeQuery()) {
                             while (result.next()) {
@@ -255,9 +284,11 @@ public class ClanWarCommand {
                         }
                     }
                 }
+
             } catch (SQLException exception) {
                 plugin.getLogger().warning(
-                        "Gagal mengambil tab completion Clan War: " + exception.getMessage()
+                        "Gagal mengambil tab completion Clan War: "
+                                + exception.getMessage()
                 );
             }
         }
@@ -279,9 +310,21 @@ public class ClanWarCommand {
         return builder.toString();
     }
 
-    private void databaseError(Player player, SQLException exception) {
-        player.sendMessage(color("&cTerjadi kesalahan saat mengambil data clan."));
-        plugin.getLogger().severe("ClanWarCommand database error: " + exception.getMessage());
+    private void databaseError(
+            Player player,
+            SQLException exception
+    ) {
+        send(player,
+                "&cTerjadi kesalahan saat mengambil data clan.");
+
+        plugin.getLogger().severe(
+                "ClanWarCommand database error: "
+                        + exception.getMessage()
+        );
+    }
+
+    private void send(Player player, String text) {
+        player.sendMessage(color(text));
     }
 
     private String color(String text) {

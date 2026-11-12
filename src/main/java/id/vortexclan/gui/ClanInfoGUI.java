@@ -3,6 +3,7 @@ package id.vortexclan.gui;
 
 import id.vortexclan.VortexClan;
 import id.vortexclan.clan.Clan;
+import id.vortexclan.clan.ClanLeaderboardManager.SortType;
 
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
@@ -22,8 +23,9 @@ import java.sql.SQLException;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
-public class ClanInfoGUI implements Listener {
+public final class ClanInfoGUI implements Listener {
 
     private final VortexClan plugin;
     private final DecimalFormat moneyFormat =
@@ -40,152 +42,170 @@ public class ClanInfoGUI implements Listener {
             clan = plugin.getClanManager().getClanByPlayer(
                     player.getUniqueId()
             );
-        } catch (SQLException exception) {
-            player.sendMessage(color("&cGagal mengambil informasi clan."));
-            plugin.getLogger().severe(
-                    "ClanInfoGUI database error: " + exception.getMessage()
+
+            if (clan == null) {
+                player.sendMessage(color("&cKamu belum memiliki clan."));
+                return;
+            }
+
+            int members = plugin.getClanManager()
+                    .getMemberCount(clan.getId());
+
+            int capacity = plugin.getClanManager()
+                    .getCapacity(clan.getLevel());
+
+            int rank = plugin.getClanLeaderboardManager()
+                    .getClanPosition(clan.getId(), SortType.LEVEL);
+
+            int onlineMembers = getOnlineMembers(clan.getId());
+
+            OfflinePlayer leader = Bukkit.getOfflinePlayer(
+                    clan.getLeader()
             );
-            return;
+
+            String leaderName = leader.getName() != null
+                    ? leader.getName()
+                    : "Unknown";
+
+            InfoHolder holder = new InfoHolder();
+
+            Inventory inventory = Bukkit.createInventory(
+                    holder,
+                    45,
+                    color("&8Clan Information")
+            );
+
+            holder.setInventory(inventory);
+
+            fillBackground(inventory);
+
+            setItem(
+                    inventory,
+                    4,
+                    Material.NETHER_STAR,
+                    "&b&l" + clan.getName(),
+                    List.of(
+                            "&7Tag: &f[" + clan.getTag() + "]",
+                            "&7Leader: &f" + leaderName,
+                            "",
+                            "&8Clan Information"
+                    )
+            );
+
+            setItem(
+                    inventory,
+                    10,
+                    Material.EXPERIENCE_BOTTLE,
+                    "&a&lCLAN LEVEL",
+                    List.of(
+                            "&7Level: &a" + clan.getLevel(),
+                            "&7EXP: &f" + clan.getExp(),
+                            "",
+                            "&7Rank: &e#" + Math.max(0, rank),
+                            "",
+                            "&8Clan Progress"
+                    )
+            );
+
+            setItem(
+                    inventory,
+                    12,
+                    Material.PLAYER_HEAD,
+                    "&b&lMEMBERS",
+                    List.of(
+                            "&7Total anggota: &f" + members,
+                            "&7Online: &a" + onlineMembers,
+                            "&7Kapasitas: &f" + capacity,
+                            "",
+                            "&8Clan Members"
+                    )
+            );
+
+            setItem(
+                    inventory,
+                    14,
+                    Material.GOLD_INGOT,
+                    "&6&lCLAN BANK",
+                    List.of(
+                            "&7Saldo: &a$"
+                                    + moneyFormat.format(clan.getBank()),
+                            "",
+                            "&8Clan Economy"
+                    )
+            );
+
+            setItem(
+                    inventory,
+                    16,
+                    clan.isPvpEnabled()
+                            ? Material.DIAMOND_SWORD
+                            : Material.SHIELD,
+                    "&c&lCLAN PVP",
+                    List.of(
+                            "&7Status: "
+                                    + (clan.isPvpEnabled()
+                                    ? "&aAktif"
+                                    : "&cNonaktif"),
+                            "",
+                            "&8Friendly Fire"
+                    )
+            );
+
+            setItem(
+                    inventory,
+                    29,
+                    Material.GOLDEN_SWORD,
+                    "&a&lWAR WINS",
+                    List.of(
+                            "&7Total kemenangan: &a" + clan.getWins()
+                    )
+            );
+
+            setItem(
+                    inventory,
+                    31,
+                    Material.SKELETON_SKULL,
+                    "&c&lWAR LOSSES",
+                    List.of(
+                            "&7Total kekalahan: &c" + clan.getLosses()
+                    )
+            );
+
+            setItem(
+                    inventory,
+                    33,
+                    Material.IRON_SWORD,
+                    "&e&lTOTAL KILLS",
+                    List.of(
+                            "&7Total kill: &e" + clan.getKills()
+                    )
+            );
+
+            setItem(
+                    inventory,
+                    40,
+                    Material.BARRIER,
+                    "&c&lTUTUP",
+                    List.of("&7Klik untuk menutup.")
+            );
+
+            player.openInventory(inventory);
+
+        } catch (SQLException exception) {
+            plugin.getLogger().severe(
+                    "ClanInfoGUI database error: "
+                            + exception.getMessage()
+            );
+
+            player.sendMessage(
+                    color("&cGagal mengambil informasi clan.")
+            );
         }
-
-        if (clan == null) {
-            player.sendMessage(color("&cKamu belum memiliki clan."));
-            return;
-        }
-
-        int members = plugin.getClanManager().getMemberCount(clan.getId());
-        int capacity = plugin.getClanManager().getCapacity(clan.getId());
-
-        int rank = plugin.getClanLeaderboardManager().getClanRank(
-                clan.getId(),
-                "level"
-        );
-
-        int onlineMembers = getOnlineMembers(String.valueOf(clan.getId()));
-
-        String leaderName = getPlayerName(clan.getLeaderUuid().toString());
-
-        Inventory inventory = Bukkit.createInventory(
-                new InfoHolder(),
-                45,
-                color("&8Clan Information")
-        );
-
-        fillBackground(inventory);
-
-        setItem(
-                inventory,
-                4,
-                Material.NETHER_STAR,
-                "&b&l" + clan.getName(),
-                List.of(
-                        "&7Tag: &f[" + clan.getTag() + "]",
-                        "&7Leader: &f" + leaderName,
-                        "",
-                        "&8Clan Information"
-                )
-        );
-
-        setItem(
-                inventory,
-                10,
-                Material.EXPERIENCE_BOTTLE,
-                "&a&lCLAN LEVEL",
-                List.of(
-                        "&7Level: &a" + clan.getLevel(),
-                        "&7EXP: &f" + clan.getExp(),
-                        "",
-                        "&7Rank: &e#" + Math.max(0, rank),
-                        "",
-                        "&8Clan Progress"
-                )
-        );
-
-        setItem(
-                inventory,
-                12,
-                Material.PLAYER_HEAD,
-                "&b&lMEMBERS",
-                List.of(
-                        "&7Total anggota: &f" + members,
-                        "&7Online: &a" + onlineMembers,
-                        "&7Kapasitas: &f" + capacity,
-                        "",
-                        "&8Clan Members"
-                )
-        );
-
-        setItem(
-                inventory,
-                14,
-                Material.GOLD_INGOT,
-                "&6&lCLAN BANK",
-                List.of(
-                        "&7Saldo: &a$" + moneyFormat.format(clan.getBank()),
-                        "",
-                        "&8Clan Economy"
-                )
-        );
-
-        setItem(
-                inventory,
-                16,
-                clan.isPvpEnabled()
-                        ? Material.DIAMOND_SWORD
-                        : Material.SHIELD,
-                "&c&lCLAN PVP",
-                List.of(
-                        "&7Status: "
-                                + (clan.isPvpEnabled()
-                                ? "&aAktif"
-                                : "&cNonaktif"),
-                        "",
-                        "&8Friendly Fire"
-                )
-        );
-
-        setItem(
-                inventory,
-                29,
-                Material.GOLDEN_SWORD,
-                "&a&lWAR WINS",
-                List.of(
-                        "&7Total kemenangan: &a" + clan.getWins()
-                )
-        );
-
-        setItem(
-                inventory,
-                31,
-                Material.SKELETON_SKULL,
-                "&c&lWAR LOSSES",
-                List.of(
-                        "&7Total kekalahan: &c" + clan.getLosses()
-                )
-        );
-
-        setItem(
-                inventory,
-                33,
-                Material.IRON_SWORD,
-                "&e&lTOTAL KILLS",
-                List.of(
-                        "&7Total kill: &e" + clan.getKills()
-                )
-        );
-
-        setItem(
-                inventory,
-                40,
-                Material.BARRIER,
-                "&c&lTUTUP",
-                List.of("&7Klik untuk menutup.")
-        );
-
-        player.openInventory(inventory);
     }
 
-    private int getOnlineMembers(String clanId) {
+    private int getOnlineMembers(String clanId)
+            throws SQLException {
+
         String sql = """
                 SELECT uuid
                 FROM clan_members
@@ -203,7 +223,7 @@ public class ClanInfoGUI implements Listener {
                 try (var result = statement.executeQuery()) {
                     while (result.next()) {
                         try {
-                            java.util.UUID uuid = java.util.UUID.fromString(
+                            UUID uuid = UUID.fromString(
                                     result.getString("uuid")
                             );
 
@@ -212,34 +232,15 @@ public class ClanInfoGUI implements Listener {
                             if (member != null && member.isOnline()) {
                                 online++;
                             }
+
                         } catch (IllegalArgumentException ignored) {
                         }
                     }
                 }
-
-            } catch (SQLException exception) {
-                plugin.getLogger().warning(
-                        "Gagal menghitung online members: "
-                                + exception.getMessage()
-                );
             }
         }
 
         return online;
-    }
-
-    private String getPlayerName(String uuid) {
-        try {
-            OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(
-                    java.util.UUID.fromString(uuid)
-            );
-
-            return offlinePlayer.getName() != null
-                    ? offlinePlayer.getName()
-                    : "Unknown";
-        } catch (IllegalArgumentException exception) {
-            return "Unknown";
-        }
     }
 
     private void fillBackground(Inventory inventory) {
@@ -327,7 +328,8 @@ public class ClanInfoGUI implements Listener {
         return ChatColor.translateAlternateColorCodes('&', text);
     }
 
-    private static class InfoHolder implements InventoryHolder {
+    private static final class InfoHolder
+            implements InventoryHolder {
 
         private Inventory inventory;
 

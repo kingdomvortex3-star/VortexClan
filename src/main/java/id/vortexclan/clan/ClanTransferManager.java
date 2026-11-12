@@ -2,6 +2,7 @@
 package id.vortexclan.clan;
 
 import id.vortexclan.VortexClan;
+import id.vortexclan.database.DatabaseManager;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -55,7 +56,7 @@ public class ClanTransferManager {
         }
 
         try {
-            if (!clanManager.isLeader(leaderUuid)) {
+            if (!clanManager.isLeader(leaderUuid, clanId)) {
                 return Result.NO_PERMISSION;
             }
         } catch (SQLException exception) {

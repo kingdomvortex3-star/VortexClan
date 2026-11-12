@@ -34,7 +34,6 @@ public class ClanBankGUI implements Listener {
 
     private final VortexClan plugin;
     private final ClanBankManager bankManager;
-    private final ClanBankTransactionGUI transactionGUI;
 
     private final Map<UUID, BankAction> pendingInputs =
             new ConcurrentHashMap<>();
@@ -45,7 +44,6 @@ public class ClanBankGUI implements Listener {
     public ClanBankGUI(VortexClan plugin) {
         this.plugin = plugin;
         this.bankManager = plugin.getClanBankManager();
-        this.transactionGUI = new ClanBankTransactionGUI(plugin);
     }
 
     public void open(Player player) {
@@ -111,7 +109,6 @@ public class ClanBankGUI implements Listener {
         );
 
         holder.setInventory(inventory);
-
         fillBackground(inventory);
 
         setItem(
@@ -201,7 +198,10 @@ public class ClanBankGUI implements Listener {
         switch (event.getRawSlot()) {
             case 11 -> requestAmount(player, BankAction.DEPOSIT);
             case 15 -> requestAmount(player, BankAction.WITHDRAW);
-            case 18 -> transactionGUI.open(player);
+            case 18 -> {
+                player.closeInventory();
+                plugin.getClanBankTransactionGUI().open(player);
+            }
             case 22 -> player.closeInventory();
             default -> {
             }
@@ -237,8 +237,7 @@ public class ClanBankGUI implements Listener {
 
         if (action == BankAction.DEPOSIT
                 && !plugin.getConfig().getBoolean(
-                        "clan.bank.allow-deposit", true
-                )) {
+                "clan.bank.allow-deposit", true)) {
             player.sendMessage(color("&cDeposit sedang dinonaktifkan."));
             return;
         }
@@ -268,15 +267,13 @@ public class ClanBankGUI implements Listener {
             }
 
             if (!plugin.getConfig().getBoolean(
-                    "clan.bank.allow-withdraw", true
-            )) {
+                    "clan.bank.allow-withdraw", true)) {
                 player.sendMessage(color("&cWithdraw sedang dinonaktifkan."));
                 return;
             }
         }
 
         pendingInputs.put(player.getUniqueId(), action);
-
         player.closeInventory();
 
         player.sendMessage(color("&8&m--------------------------------"));
@@ -370,34 +367,23 @@ public class ClanBankGUI implements Listener {
                                 ? "&aBerhasil deposit &f$" + formatMoney(amount)
                                 : "&aBerhasil withdraw &f$" + formatMoney(amount)
                 ));
-
                 open(player);
             }
 
             case NO_CLAN ->
-                    player.sendMessage(color(
-                            "&cKamu belum memiliki clan."
-                    ));
+                    player.sendMessage(color("&cKamu belum memiliki clan."));
 
             case ECONOMY_UNAVAILABLE ->
-                    player.sendMessage(color(
-                            "&cVault Economy tidak tersedia."
-                    ));
+                    player.sendMessage(color("&cVault Economy tidak tersedia."));
 
             case INVALID_AMOUNT ->
-                    player.sendMessage(color(
-                            "&cJumlah uang tidak valid."
-                    ));
+                    player.sendMessage(color("&cJumlah uang tidak valid."));
 
             case INSUFFICIENT_MONEY ->
-                    player.sendMessage(color(
-                            "&cUang kamu tidak mencukupi."
-                    ));
+                    player.sendMessage(color("&cUang kamu tidak mencukupi."));
 
             case INSUFFICIENT_BANK ->
-                    player.sendMessage(color(
-                            "&cSaldo bank clan tidak mencukupi."
-                    ));
+                    player.sendMessage(color("&cSaldo bank clan tidak mencukupi."));
 
             case NO_PERMISSION ->
                     player.sendMessage(color(

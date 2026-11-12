@@ -74,7 +74,6 @@ public class ClanSettingsGUI implements Listener {
         );
 
         holder.setInventory(inventory);
-
         fillBackground(inventory);
 
         setItem(
@@ -234,7 +233,6 @@ public class ClanSettingsGUI implements Listener {
 
             case 16 -> {
                 player.closeInventory();
-
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     if (player.isOnline()) {
                         plugin.getClanBankGUI().open(player);
@@ -244,12 +242,20 @@ public class ClanSettingsGUI implements Listener {
 
             case 28 -> {
                 player.closeInventory();
-                new ClanInviteGUI(plugin).open(player);
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    if (player.isOnline()) {
+                        plugin.getClanInviteGUI().open(player);
+                    }
+                });
             }
 
             case 30 -> {
                 player.closeInventory();
-                new ClanInfoGUI(plugin).open(player);
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    if (player.isOnline()) {
+                        plugin.getClanInfoGUI().open(player);
+                    }
+                });
             }
 
             case 32 -> {

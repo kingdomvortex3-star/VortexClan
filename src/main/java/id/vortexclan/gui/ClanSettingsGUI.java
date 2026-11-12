@@ -57,6 +57,7 @@ public class ClanSettingsGUI implements Listener {
             );
         } catch (SQLException exception) {
             player.sendMessage(color("&cGagal memeriksa role clan."));
+            plugin.getLogger().severe(exception.getMessage());
             return;
         }
 
@@ -215,9 +216,7 @@ public class ClanSettingsGUI implements Listener {
             return;
         }
 
-        int slot = event.getRawSlot();
-
-        switch (slot) {
+        switch (event.getRawSlot()) {
             case 10 -> {
                 player.closeInventory();
                 player.performCommand("clan pvp");
@@ -235,7 +234,12 @@ public class ClanSettingsGUI implements Listener {
 
             case 16 -> {
                 player.closeInventory();
-                new ClanBankGUI(plugin).open(player);
+
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    if (player.isOnline()) {
+                        plugin.getClanBankGUI().open(player);
+                    }
+                });
             }
 
             case 28 -> {

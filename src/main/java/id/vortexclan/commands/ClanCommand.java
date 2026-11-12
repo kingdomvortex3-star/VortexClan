@@ -2,7 +2,7 @@
 package id.vortexclan.commands;
 
 import id.vortexclan.VortexClan;
-import id.vortexclan.command.ClanWarCommand;
+import id.vortexclan.commands.ClanWarCommand;
 import id.vortexclan.clan.Clan;
 import id.vortexclan.clan.ClanManager;
 import id.vortexclan.clan.ClanMemberManager;

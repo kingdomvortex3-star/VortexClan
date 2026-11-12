@@ -31,6 +31,8 @@ import id.vortexclan.listeners.ClanChatListener;
 import id.vortexclan.listeners.ClanPvPListener;
 import id.vortexclan.listeners.ClanWarListener;
 
+import id.vortexclan.placeholder.VortexClanExpansion;
+
 import org.bukkit.Bukkit;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -65,6 +67,8 @@ public final class VortexClan extends JavaPlugin {
     private ClanWarGUI clanWarGUI;
     private ClanWarLeaderboardGUI clanWarLeaderboardGUI;
 
+    private VortexClanExpansion placeholderExpansion;
+
     private BukkitTask taxTask;
 
     @Override
@@ -76,6 +80,7 @@ public final class VortexClan extends JavaPlugin {
             initializeManagers();
             registerListeners();
             registerCommands();
+            registerPlaceholderExpansion();
 
             clanWarRecoveryManager.recover();
             startTaxTask();
@@ -86,6 +91,9 @@ public final class VortexClan extends JavaPlugin {
             getLogger().info("Clan Alliance: Enabled");
             getLogger().info("Clan War: Enabled");
             getLogger().info("Clan Leaderboard: Enabled");
+            getLogger().info("PlaceholderAPI: "
+                    + (placeholderExpansion != null
+                    ? "Enabled" : "Disabled"));
             getLogger().info("--------------------------------");
 
         } catch (Exception exception) {
@@ -120,6 +128,11 @@ public final class VortexClan extends JavaPlugin {
 
         if (clanHomeManager != null) {
             clanHomeManager.clearCooldowns();
+        }
+
+        if (placeholderExpansion != null) {
+            placeholderExpansion.unregister();
+            placeholderExpansion = null;
         }
 
         if (databaseManager != null) {
@@ -174,9 +187,7 @@ public final class VortexClan extends JavaPlugin {
                 databaseManager
         );
 
-        clanChatManager = new ClanChatManager(
-                this
-        );
+        clanChatManager = new ClanChatManager(this);
 
         clanHomeManager = new ClanHomeManager(
                 this,
@@ -228,6 +239,29 @@ public final class VortexClan extends JavaPlugin {
                 this,
                 clanWarLeaderboardManager
         );
+    }
+
+    private void registerPlaceholderExpansion() {
+        if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") == null) {
+            getLogger().info(
+                    "PlaceholderAPI tidak ditemukan. Expansion dilewati."
+            );
+            return;
+        }
+
+        placeholderExpansion = new VortexClanExpansion(this);
+
+        if (placeholderExpansion.register()) {
+            getLogger().info(
+                    "PlaceholderAPI expansion berhasil didaftarkan: %vortexclan_%"
+            );
+        } else {
+            placeholderExpansion = null;
+
+            getLogger().warning(
+                    "Gagal mendaftarkan PlaceholderAPI expansion!"
+            );
+        }
     }
 
     private void registerListeners() {

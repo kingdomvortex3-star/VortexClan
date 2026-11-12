@@ -28,7 +28,6 @@ clan:
     interval-days: 7
     disband-if-unpaid: true
 
-clan:
   bank:
     enabled: true
     starting-balance: 0
@@ -76,7 +75,7 @@ messages:
   clan-disbanded: "&cClan telah dibubarkan!"
   no-permission: "&cKamu tidak memiliki permission!"
   player-not-found: "&cPlayer tidak ditemukan!"
-  insufficient-money: "&cUang kamu tidak mencukupi!"
+  insufficient-money: "&cUang kamu tidak mencukupi! Biaya pembuatan clan: $1.000"
   insufficient-bank: "&cSaldo bank clan tidak mencukupi!"
   tax-paid: "&aPajak clan berhasil dibayar!"
   tax-unpaid: "&cClan dibubarkan karena pajak tidak dibayar!"

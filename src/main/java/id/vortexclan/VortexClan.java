@@ -1,6 +1,8 @@
 
 package id.vortexclan;
 
+import id.vortexclan.clan.ClanAllianceChatManager;
+import id.vortexclan.clan.ClanAllianceManager;
 import id.vortexclan.clan.ClanBankManager;
 import id.vortexclan.clan.ClanChatManager;
 import id.vortexclan.clan.ClanHomeManager;
@@ -10,12 +12,24 @@ import id.vortexclan.clan.ClanManager;
 import id.vortexclan.clan.ClanMemberManager;
 import id.vortexclan.clan.ClanPvPManager;
 import id.vortexclan.clan.ClanTaxManager;
+import id.vortexclan.clan.ClanWarLeaderboardManager;
+import id.vortexclan.clan.ClanWarManager;
+import id.vortexclan.clan.ClanWarRecoveryManager;
+
 import id.vortexclan.commands.ClanCommand;
 import id.vortexclan.database.DatabaseManager;
 import id.vortexclan.economy.VaultManager;
+
+import id.vortexclan.gui.ClanAllianceGUI;
 import id.vortexclan.gui.ClanLeaderboardGUI;
+import id.vortexclan.gui.ClanWarGUI;
+import id.vortexclan.gui.ClanWarLeaderboardGUI;
+
+import id.vortexclan.listeners.ClanAllianceChatListener;
+import id.vortexclan.listeners.ClanAllianceListener;
 import id.vortexclan.listeners.ClanChatListener;
 import id.vortexclan.listeners.ClanPvPListener;
+import id.vortexclan.listeners.ClanWarListener;
 
 import org.bukkit.Bukkit;
 import org.bukkit.command.PluginCommand;
@@ -39,7 +53,17 @@ public final class VortexClan extends JavaPlugin {
     private ClanChatManager clanChatManager;
     private ClanHomeManager clanHomeManager;
 
+    private ClanAllianceManager clanAllianceManager;
+    private ClanAllianceChatManager clanAllianceChatManager;
+
+    private ClanWarManager clanWarManager;
+    private ClanWarRecoveryManager clanWarRecoveryManager;
+    private ClanWarLeaderboardManager clanWarLeaderboardManager;
+
     private ClanLeaderboardGUI clanLeaderboardGUI;
+    private ClanAllianceGUI clanAllianceGUI;
+    private ClanWarGUI clanWarGUI;
+    private ClanWarLeaderboardGUI clanWarLeaderboardGUI;
 
     private BukkitTask taxTask;
 
@@ -53,9 +77,18 @@ public final class VortexClan extends JavaPlugin {
             initializeManagers();
             registerListeners();
             registerCommands();
+
+            clanWarRecoveryManager.recover();
+
             startTaxTask();
 
+            getLogger().info("--------------------------------");
             getLogger().info("VortexClan berhasil diaktifkan!");
+            getLogger().info("Clan System: Enabled");
+            getLogger().info("Clan Alliance: Enabled");
+            getLogger().info("Clan War: Enabled");
+            getLogger().info("Clan Leaderboard: Enabled");
+            getLogger().info("--------------------------------");
 
         } catch (Exception exception) {
             getLogger().severe("Gagal mengaktifkan VortexClan!");
@@ -72,8 +105,20 @@ public final class VortexClan extends JavaPlugin {
             taxTask = null;
         }
 
+        if (clanWarManager != null) {
+            clanWarManager.cancelTasks();
+        }
+
         if (clanChatManager != null) {
             clanChatManager.clear();
+        }
+
+        if (clanAllianceChatManager != null) {
+            clanAllianceChatManager.clear();
+        }
+
+        if (clanAllianceGUI != null) {
+            clanAllianceGUI.clearWaitingInputs();
         }
 
         if (clanHomeManager != null) {
@@ -143,8 +188,50 @@ public final class VortexClan extends JavaPlugin {
                 databaseManager
         );
 
+        clanAllianceManager = new ClanAllianceManager(
+                this,
+                databaseManager,
+                clanManager
+        );
+
+        clanAllianceChatManager = new ClanAllianceChatManager(
+                this,
+                clanAllianceManager
+        );
+
+        clanWarManager = new ClanWarManager(
+                this,
+                databaseManager
+        );
+
+        clanWarRecoveryManager = new ClanWarRecoveryManager(
+                this,
+                databaseManager,
+                clanWarManager
+        );
+
+        clanWarLeaderboardManager = new ClanWarLeaderboardManager(
+                databaseManager
+        );
+
         clanLeaderboardGUI = new ClanLeaderboardGUI(
-                this
+                this,
+                clanLeaderboardManager
+        );
+
+        clanAllianceGUI = new ClanAllianceGUI(
+                this,
+                clanAllianceManager
+        );
+
+        clanWarGUI = new ClanWarGUI(
+                this,
+                clanWarManager
+        );
+
+        clanWarLeaderboardGUI = new ClanWarLeaderboardGUI(
+                this,
+                clanWarLeaderboardManager
         );
     }
 
@@ -155,12 +242,51 @@ public final class VortexClan extends JavaPlugin {
         );
 
         Bukkit.getPluginManager().registerEvents(
+                clanAllianceGUI,
+                this
+        );
+
+        Bukkit.getPluginManager().registerEvents(
+                clanWarGUI,
+                this
+        );
+
+        Bukkit.getPluginManager().registerEvents(
+                clanWarLeaderboardGUI,
+                this
+        );
+
+        Bukkit.getPluginManager().registerEvents(
                 new ClanPvPListener(this),
                 this
         );
 
         Bukkit.getPluginManager().registerEvents(
                 new ClanChatListener(this, clanChatManager),
+                this
+        );
+
+        Bukkit.getPluginManager().registerEvents(
+                new ClanAllianceChatListener(
+                        this,
+                        clanAllianceChatManager
+                ),
+                this
+        );
+
+        Bukkit.getPluginManager().registerEvents(
+                new ClanAllianceListener(
+                        this,
+                        clanAllianceManager
+                ),
+                this
+        );
+
+        Bukkit.getPluginManager().registerEvents(
+                new ClanWarListener(
+                        this,
+                        clanWarManager
+                ),
                 this
         );
     }
@@ -261,7 +387,39 @@ public final class VortexClan extends JavaPlugin {
         return clanHomeManager;
     }
 
+    public ClanAllianceManager getClanAllianceManager() {
+        return clanAllianceManager;
+    }
+
+    public ClanAllianceChatManager getClanAllianceChatManager() {
+        return clanAllianceChatManager;
+    }
+
+    public ClanWarManager getClanWarManager() {
+        return clanWarManager;
+    }
+
+    public ClanWarRecoveryManager getClanWarRecoveryManager() {
+        return clanWarRecoveryManager;
+    }
+
+    public ClanWarLeaderboardManager getClanWarLeaderboardManager() {
+        return clanWarLeaderboardManager;
+    }
+
     public ClanLeaderboardGUI getClanLeaderboardGUI() {
         return clanLeaderboardGUI;
+    }
+
+    public ClanAllianceGUI getClanAllianceGUI() {
+        return clanAllianceGUI;
+    }
+
+    public ClanWarGUI getClanWarGUI() {
+        return clanWarGUI;
+    }
+
+    public ClanWarLeaderboardGUI getClanWarLeaderboardGUI() {
+        return clanWarLeaderboardGUI;
     }
 }

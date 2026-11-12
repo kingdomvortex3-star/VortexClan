@@ -4,7 +4,9 @@ package id.vortexclan.gui;
 import id.vortexclan.VortexClan;
 import id.vortexclan.clan.Clan;
 import id.vortexclan.clan.ClanAllianceManager;
+
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
+
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
@@ -20,16 +22,18 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 
 import java.sql.SQLException;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class ClanAllianceGUI implements Listener {
 
     private final VortexClan plugin;
     private final ClanAllianceManager allianceManager;
-    private final Set<UUID> waitingInput = new HashSet<>();
+
+    private final Set<UUID> waitingInput =
+            ConcurrentHashMap.newKeySet();
 
     public ClanAllianceGUI(
             VortexClan plugin,
@@ -154,7 +158,8 @@ public class ClanAllianceGUI implements Listener {
             return;
         }
 
-        if (!(event.getInventory().getHolder() instanceof AllianceHolder)) {
+        if (!(event.getView().getTopInventory().getHolder()
+                instanceof AllianceHolder)) {
             return;
         }
 
@@ -219,7 +224,7 @@ public class ClanAllianceGUI implements Listener {
         Player player = event.getPlayer();
         UUID uuid = player.getUniqueId();
 
-        if (!waitingInput.contains(uuid)) {
+        if (!waitingInput.remove(uuid)) {
             return;
         }
 
@@ -228,13 +233,23 @@ public class ClanAllianceGUI implements Listener {
         String input = PlainTextComponentSerializer.plainText()
                 .serialize(event.message()).trim();
 
-        if (!waitingInput.remove(uuid)) {
-            return;
-        }
-
         Bukkit.getScheduler().runTask(plugin, () -> {
+            if (!player.isOnline()) {
+                return;
+            }
+
             if (input.equalsIgnoreCase("batal")) {
-                player.sendMessage(color("&cUndangan aliansi dibatalkan."));
+                player.sendMessage(color(
+                        "&cUndangan aliansi dibatalkan."
+                ));
+                open(player);
+                return;
+            }
+
+            if (input.isBlank()) {
+                player.sendMessage(color(
+                        "&cNama atau tag clan tidak boleh kosong!"
+                ));
                 open(player);
                 return;
             }
@@ -293,8 +308,21 @@ public class ClanAllianceGUI implements Listener {
             ItemStack item,
             ClickType click
     ) {
+        if (!hasManagementPermission(player)) {
+            player.sendMessage(color(
+                    "&cHanya Leader dan Co-Leader yang dapat mengelola undangan!"
+            ));
+            return;
+        }
+
+        ItemMeta meta = item.getItemMeta();
+
+        if (meta == null || meta.getDisplayName() == null) {
+            return;
+        }
+
         String sourceName = ChatColor.stripColor(
-                item.getItemMeta().getDisplayName()
+                meta.getDisplayName()
         );
 
         if (sourceName == null) {
@@ -371,8 +399,14 @@ public class ClanAllianceGUI implements Listener {
             return;
         }
 
+        ItemMeta meta = item.getItemMeta();
+
+        if (meta == null || meta.getDisplayName() == null) {
+            return;
+        }
+
         String clanName = ChatColor.stripColor(
-                item.getItemMeta().getDisplayName()
+                meta.getDisplayName()
         );
 
         if (clanName == null) {

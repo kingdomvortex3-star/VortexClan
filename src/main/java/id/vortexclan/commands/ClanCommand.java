@@ -2,7 +2,6 @@
 package id.vortexclan.commands;
 
 import id.vortexclan.VortexClan;
-import id.vortexclan.commands.ClanWarCommand;
 import id.vortexclan.clan.Clan;
 import id.vortexclan.clan.ClanManager;
 import id.vortexclan.clan.ClanMemberManager;
@@ -62,15 +61,30 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
 
         if (args.length == 0) {
             if (!(sender instanceof Player player)) {
-                showHelp(sender);
+                showHelp(sender, 1);
                 return true;
             }
 
-            showMainInfo(player);
+            plugin.getClanMainGUI().open(player);
             return true;
         }
 
         switch (args[0].toLowerCase()) {
+
+            case "help" -> {
+                int page = 1;
+
+                if (args.length >= 2) {
+                    try {
+                        page = Integer.parseInt(args[1]);
+                    } catch (NumberFormatException exception) {
+                        send(sender, "&cNomor halaman harus berupa angka!");
+                        return true;
+                    }
+                }
+
+                showHelp(sender, page);
+            }
 
             case "create" -> {
                 if (!(sender instanceof Player player)) {
@@ -269,7 +283,7 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
                 message(sender, "reload-success");
             }
 
-            default -> showHelp(sender);
+            default -> showHelp(sender, 1);
         }
 
         return true;
@@ -703,6 +717,7 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
 
         if (result == ClanMemberManager.Result.SUCCESS) {
             send(player, "&aKamu berhasil keluar dari clan!");
+
             plugin.getClanChatManager().disable(player);
 
             plugin.getClanAllianceChatManager()
@@ -774,25 +789,6 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
         }
     }
 
-    private void showMainInfo(Player player) {
-        send(player, "&8&m------------------------------");
-        send(player, "&b&lVORTEX CLAN");
-        send(player, "&7/clan info &8- &fInformasi clan");
-        send(player, "&7/clan create <nama> <tag> &8- &fBuat clan");
-        send(player, "&7/clan home &8- &fTeleport ke Clan Home");
-        send(player, "&7/clan sethome &8- &fAtur Clan Home");
-        send(player, "&7/clan leaderboard &8- &fRanking clan");
-        send(player, "&7/clan pvp &8- &fToggle Clan PvP");
-        send(player, "&7/clan chat &8- &fToggle Clan Chat");
-        send(player, "&7/clan alliance &8- &fMenu aliansi clan");
-        send(player, "&7/clan alliancechat &8- &fToggle Alliance Chat");
-        send(player, "&7/clan war &8- &fClan War commands");
-        send(player, "&7/clan war gui &8- &fMenu Clan War");
-        send(player, "&7/clan warleaderboard &8- &fRanking Clan War");
-        send(player, "&7/cc <pesan> &8- &fKirim pesan clan");
-        send(player, "&8&m------------------------------");
-    }
-
     private void notifyClan(Clan clan, String text) {
         try {
             for (Player online : Bukkit.getOnlinePlayers()) {
@@ -810,34 +806,72 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
         }
     }
 
-    private void showHelp(CommandSender sender) {
-        send(sender, "&8&m------------------------------");
-        send(sender, "&b&lVORTEX CLAN COMMANDS");
-        send(sender, "&b/clan &7- Main menu");
-        send(sender, "&b/clan create <nama> <tag> &7- Create clan");
-        send(sender, "&b/clan info &7- Clan information");
-        send(sender, "&b/clan invite <player> &7- Invite player");
-        send(sender, "&b/clan accept &7- Accept invitation");
-        send(sender, "&b/clan deny &7- Deny invitation");
-        send(sender, "&b/clan kick <player> &7- Kick member");
-        send(sender, "&b/clan leave &7- Leave clan");
-        send(sender, "&b/clan sethome &7- Set Clan Home");
-        send(sender, "&b/clan home &7- Teleport to Clan Home");
-        send(sender, "&b/clan pvp &7- Toggle Clan PvP");
-        send(sender, "&b/clan chat &7- Toggle Clan Chat");
-        send(sender, "&b/clan chat <pesan> &7- Kirim pesan clan");
-        send(sender, "&b/cc <pesan> &7- Shortcut Clan Chat");
-        send(sender, "&b/clan leaderboard &7- Clan leaderboard");
-        send(sender, "&b/clan top <level|wins|bank> &7- Ranking category");
-        send(sender, "&b/clan alliance &7- Buka menu aliansi");
-        send(sender, "&b/clan alliancechat &7- Toggle Alliance Chat");
-        send(sender, "&b/clan war challenge <clan> &7- Tantang clan");
-        send(sender, "&b/clan war accept|deny &7- Kelola tantangan");
-        send(sender, "&b/clan war status &7- Status perang");
-        send(sender, "&b/clan war gui &7- Menu Clan War");
-        send(sender, "&b/clan warleaderboard <wins|losses|kills> &7- Ranking War");
-        send(sender, "&b/clan reload &7- Reload config");
-        send(sender, "&8&m------------------------------");
+    private void showHelp(CommandSender sender, int requestedPage) {
+        List<String[]> commands = List.of(
+                new String[]{"/clan", "Buka menu utama VortexClan"},
+                new String[]{"/clan help [halaman]", "Lihat daftar command"},
+                new String[]{"/clan create <nama> <tag>", "Membuat clan (biaya $1.000)"},
+                new String[]{"/clan info", "Melihat informasi clan"},
+                new String[]{"/clan invite <player>", "Mengundang player ke clan"},
+                new String[]{"/clan accept", "Menerima undangan clan"},
+                new String[]{"/clan deny", "Menolak undangan clan"},
+                new String[]{"/clan kick <player>", "Mengeluarkan anggota clan"},
+                new String[]{"/clan leave", "Keluar dari clan"},
+                new String[]{"/clan sethome", "Mengatur lokasi Clan Home"},
+                new String[]{"/clan home", "Teleport ke Clan Home"},
+                new String[]{"/clan pvp", "Mengaktifkan atau menonaktifkan Clan PvP"},
+                new String[]{"/clan chat", "Mengaktifkan atau menonaktifkan Clan Chat"},
+                new String[]{"/clan chat <pesan>", "Mengirim pesan ke anggota clan"},
+                new String[]{"/cc <pesan>", "Shortcut untuk mengirim Clan Chat"},
+                new String[]{"/clan leaderboard", "Membuka ranking clan"},
+                new String[]{"/clan top <level|wins|bank>", "Ranking berdasarkan kategori"},
+                new String[]{"/clan alliance", "Membuka menu aliansi clan"},
+                new String[]{"/clan alliancechat", "Toggle Alliance Chat"},
+                new String[]{"/clan war challenge <clan>", "Menantang clan lain"},
+                new String[]{"/clan war accept", "Menerima tantangan Clan War"},
+                new String[]{"/clan war deny", "Menolak tantangan Clan War"},
+                new String[]{"/clan war status", "Melihat status Clan War"},
+                new String[]{"/clan war gui", "Membuka menu Clan War"},
+                new String[]{"/clan warleaderboard <wins|losses|kills>", "Ranking statistik Clan War"},
+                new String[]{"/clan reload", "Memuat ulang konfigurasi plugin"}
+        );
+
+        int perPage = 9;
+        int totalPages = (int) Math.ceil(
+                commands.size() / (double) perPage
+        );
+
+        int page = Math.max(
+                1,
+                Math.min(requestedPage, totalPages)
+        );
+
+        int start = (page - 1) * perPage;
+        int end = Math.min(start + perPage, commands.size());
+
+        send(sender, "&8&m----------------------------------------");
+        send(sender, "&b&lVORTEX CLAN &8- &fCOMMANDS");
+        send(sender, "&7Halaman &b" + page + "&7/&b" + totalPages);
+        send(sender, "");
+
+        for (int i = start; i < end; i++) {
+            String[] entry = commands.get(i);
+
+            send(sender, "&b" + entry[0]);
+            send(sender, "  &7» &f" + entry[1]);
+        }
+
+        send(sender, "");
+
+        if (page > 1) {
+            send(sender, "&eSebelumnya: &f/clan help " + (page - 1));
+        }
+
+        if (page < totalPages) {
+            send(sender, "&eBerikutnya: &f/clan help " + (page + 1));
+        }
+
+        send(sender, "&8&m----------------------------------------");
     }
 
     private void message(CommandSender sender, String key) {
@@ -876,6 +910,7 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
         }
 
         if (args.length == 1) {
+            suggestions.add("help");
             suggestions.add("create");
             suggestions.add("info");
             suggestions.add("invite");
@@ -896,6 +931,12 @@ public final class ClanCommand implements CommandExecutor, TabCompleter {
             suggestions.add("reload");
 
         } else if (args.length == 2) {
+
+            if (args[0].equalsIgnoreCase("help")) {
+                suggestions.add("1");
+                suggestions.add("2");
+                suggestions.add("3");
+            }
 
             if (args[0].equalsIgnoreCase("war")
                     && sender instanceof Player player) {

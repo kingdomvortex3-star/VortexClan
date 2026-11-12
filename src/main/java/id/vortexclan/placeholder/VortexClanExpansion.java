@@ -57,11 +57,10 @@ public final class VortexClanExpansion extends PlaceholderExpansion {
             OfflinePlayer offlinePlayer,
             String params
     ) {
-        if (offlinePlayer == null || params == null) {
+        if (params == null) {
             return "";
         }
 
-        UUID uuid = offlinePlayer.getUniqueId();
         String parameter = params.toLowerCase(Locale.ROOT);
 
         Matcher matcher = TOP_PATTERN.matcher(parameter);
@@ -76,21 +75,30 @@ public final class VortexClanExpansion extends PlaceholderExpansion {
                 );
 
             } catch (NumberFormatException exception) {
-                return "";
+                return "-";
             }
         }
+
+        if (offlinePlayer == null) {
+            return "";
+        }
+
+        UUID uuid = offlinePlayer.getUniqueId();
 
         Clan clan;
 
         try {
-            clan = plugin.getClanManager().getClanByPlayer(uuid);
+            clan = plugin.getClanManager()
+                    .getClanByPlayer(uuid);
 
         } catch (SQLException exception) {
             plugin.getLogger().warning(
-                    "PlaceholderAPI clan error: "
-                            + exception.getMessage()
+                    "[PlaceholderAPI] Gagal mengambil clan player "
+                            + offlinePlayer.getName()
+                            + ": " + exception.getMessage()
             );
-            return "";
+
+            return "-";
         }
 
         if (clan == null) {
@@ -143,6 +151,7 @@ public final class VortexClanExpansion extends PlaceholderExpansion {
             return rank > 0 ? String.valueOf(rank) : "-";
 
         } catch (SQLException exception) {
+            logDatabaseError("Gagal mengambil ranking clan", exception);
             return "-";
         }
     }
@@ -152,22 +161,78 @@ public final class VortexClanExpansion extends PlaceholderExpansion {
             int position
     ) {
         if (position < 1 || position > 1000) {
-            return "";
+            return "-";
         }
 
+        /*
+         * Name dan Tag mengikuti ranking level clan.
+         * Urutan dibuat konsisten dengan ClanLeaderboardManager.
+         */
         String orderBy = switch (type) {
-            case "name", "tag" -> "name ASC";
-            case "level" -> "level DESC, exp DESC, name ASC";
-            case "bank" -> "bank DESC, name ASC";
-            case "wins" -> "wins DESC, kills DESC, name ASC";
-            case "losses" -> "losses DESC, name ASC";
-            case "kills" -> "kills DESC, wins DESC, name ASC";
-            case "members" -> "member_count DESC, name ASC";
+            case "name", "tag" ->
+                    """
+                    level DESC,
+                    exp DESC,
+                    wins DESC,
+                    name COLLATE NOCASE ASC,
+                    id ASC
+                    """;
+
+            case "level" ->
+                    """
+                    level DESC,
+                    exp DESC,
+                    wins DESC,
+                    name COLLATE NOCASE ASC,
+                    id ASC
+                    """;
+
+            case "bank" ->
+                    """
+                    bank DESC,
+                    level DESC,
+                    wins DESC,
+                    name COLLATE NOCASE ASC,
+                    id ASC
+                    """;
+
+            case "wins" ->
+                    """
+                    wins DESC,
+                    level DESC,
+                    exp DESC,
+                    name COLLATE NOCASE ASC,
+                    id ASC
+                    """;
+
+            case "losses" ->
+                    """
+                    losses DESC,
+                    name COLLATE NOCASE ASC,
+                    id ASC
+                    """;
+
+            case "kills" ->
+                    """
+                    kills DESC,
+                    wins DESC,
+                    name COLLATE NOCASE ASC,
+                    id ASC
+                    """;
+
+            case "members" ->
+                    """
+                    member_count DESC,
+                    level DESC,
+                    name COLLATE NOCASE ASC,
+                    id ASC
+                    """;
+
             default -> null;
         };
 
         if (orderBy == null) {
-            return "";
+            return "-";
         }
 
         String sql = """
@@ -199,15 +264,15 @@ public final class VortexClanExpansion extends PlaceholderExpansion {
 
                 try (ResultSet result = statement.executeQuery()) {
                     if (!result.next()) {
-                        return "";
+                        return "-";
                     }
 
                     return switch (type) {
                         case "name" ->
-                                result.getString("name");
+                                safeString(result, "name");
 
                         case "tag" ->
-                                result.getString("tag");
+                                safeString(result, "tag");
 
                         case "level" ->
                                 String.valueOf(result.getInt("level"));
@@ -229,19 +294,28 @@ public final class VortexClanExpansion extends PlaceholderExpansion {
                                         result.getInt("member_count")
                                 );
 
-                        default -> "";
+                        default -> "-";
                     };
                 }
 
             } catch (SQLException exception) {
-                plugin.getLogger().warning(
-                        "Leaderboard placeholder error: "
-                                + exception.getMessage()
+                logDatabaseError(
+                        "Gagal mengambil Top Clan placeholder "
+                                + type + "_" + position,
+                        exception
                 );
+
+                return "-";
             }
         }
+    }
 
-        return "";
+    private String safeString(
+            ResultSet result,
+            String column
+    ) throws SQLException {
+        String value = result.getString(column);
+        return value == null || value.isBlank() ? "-" : value;
     }
 
     private String getRole(UUID uuid) {
@@ -260,7 +334,8 @@ public final class VortexClanExpansion extends PlaceholderExpansion {
             };
 
         } catch (SQLException exception) {
-            return "None";
+            logDatabaseError("Gagal mengambil role player", exception);
+            return "-";
         }
     }
 
@@ -284,6 +359,11 @@ public final class VortexClanExpansion extends PlaceholderExpansion {
                 }
 
             } catch (SQLException exception) {
+                logDatabaseError(
+                        "Gagal mengambil jumlah anggota",
+                        exception
+                );
+
                 return 0;
             }
         }
@@ -327,9 +407,9 @@ public final class VortexClanExpansion extends PlaceholderExpansion {
                 }
 
             } catch (SQLException exception) {
-                plugin.getLogger().warning(
-                        "Gagal mengambil online clan members: "
-                                + exception.getMessage()
+                logDatabaseError(
+                        "Gagal mengambil anggota online",
+                        exception
                 );
             }
         }
@@ -364,7 +444,18 @@ public final class VortexClanExpansion extends PlaceholderExpansion {
         return minutes + "m";
     }
 
-    private synchronized String formatMoney(double amount) {
+    private String formatMoney(double amount) {
         return new DecimalFormat("#,##0.##").format(amount);
+    }
+
+    private void logDatabaseError(
+            String message,
+            SQLException exception
+    ) {
+        plugin.getLogger().warning(
+                "[VortexClan Placeholder] "
+                        + message + ": "
+                        + exception.getMessage()
+        );
     }
 }

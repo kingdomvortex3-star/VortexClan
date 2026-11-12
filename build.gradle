@@ -31,10 +31,8 @@ repositories {
 }
 
 dependencies {
-    compileOnly 'io.papermc.paper:paper-api:26.3-R0.1-SNAPSHOT'
-
+    compileOnly 'io.papermc.paper:paper-api:26.3.build.+'
     compileOnly 'com.github.MilkBowl:VaultAPI:1.7'
-
     compileOnly 'me.clip:placeholderapi:2.11.6'
 
     implementation 'org.xerial:sqlite-jdbc:3.50.3.0'

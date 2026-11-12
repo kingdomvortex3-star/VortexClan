@@ -68,9 +68,21 @@ public class ClanBankGUI implements Listener {
             return;
         }
 
-        double balance = bankManager.getBalance(
-                String.valueOf(clan.getId())
-        );
+        double balance;
+
+        try {
+            balance = bankManager.getBalance(
+                    String.valueOf(clan.getId())
+            );
+        } catch (SQLException exception) {
+            player.sendMessage(color(
+                    "&cGagal mengambil saldo bank clan."
+            ));
+            plugin.getLogger().severe(
+                    "ClanBankGUI balance: " + exception.getMessage()
+            );
+            return;
+        }
 
         String role;
 
@@ -80,6 +92,9 @@ public class ClanBankGUI implements Listener {
             );
         } catch (SQLException exception) {
             player.sendMessage(color("&cGagal mengambil role clan."));
+            plugin.getLogger().severe(
+                    "ClanBankGUI role: " + exception.getMessage()
+            );
             return;
         }
 
@@ -185,13 +200,9 @@ public class ClanBankGUI implements Listener {
 
         switch (event.getRawSlot()) {
             case 11 -> requestAmount(player, BankAction.DEPOSIT);
-
             case 15 -> requestAmount(player, BankAction.WITHDRAW);
-
             case 18 -> transactionGUI.open(player);
-
             case 22 -> player.closeInventory();
-
             default -> {
             }
         }
@@ -214,6 +225,7 @@ public class ClanBankGUI implements Listener {
             );
         } catch (SQLException exception) {
             player.sendMessage(color("&cGagal mengambil data clan."));
+            plugin.getLogger().severe(exception.getMessage());
             return;
         }
 
@@ -239,7 +251,10 @@ public class ClanBankGUI implements Listener {
                         player.getUniqueId()
                 );
             } catch (SQLException exception) {
-                player.sendMessage(color("&cGagal memeriksa permission clan."));
+                player.sendMessage(color(
+                        "&cGagal memeriksa permission clan."
+                ));
+                plugin.getLogger().severe(exception.getMessage());
                 return;
             }
 
@@ -327,7 +342,9 @@ public class ClanBankGUI implements Listener {
             }
 
             if (!Double.isFinite(amount) || amount <= 0) {
-                player.sendMessage(color("&cJumlah uang harus lebih dari 0."));
+                player.sendMessage(color(
+                        "&cJumlah uang harus lebih dari 0."
+                ));
                 return;
             }
 
@@ -358,28 +375,44 @@ public class ClanBankGUI implements Listener {
             }
 
             case NO_CLAN ->
-                    player.sendMessage(color("&cKamu belum memiliki clan."));
+                    player.sendMessage(color(
+                            "&cKamu belum memiliki clan."
+                    ));
 
             case ECONOMY_UNAVAILABLE ->
-                    player.sendMessage(color("&cVault Economy tidak tersedia."));
+                    player.sendMessage(color(
+                            "&cVault Economy tidak tersedia."
+                    ));
 
             case INVALID_AMOUNT ->
-                    player.sendMessage(color("&cJumlah uang tidak valid."));
+                    player.sendMessage(color(
+                            "&cJumlah uang tidak valid."
+                    ));
 
             case INSUFFICIENT_MONEY ->
-                    player.sendMessage(color("&cUang kamu tidak mencukupi."));
+                    player.sendMessage(color(
+                            "&cUang kamu tidak mencukupi."
+                    ));
 
             case INSUFFICIENT_BANK ->
-                    player.sendMessage(color("&cSaldo bank clan tidak mencukupi."));
+                    player.sendMessage(color(
+                            "&cSaldo bank clan tidak mencukupi."
+                    ));
 
             case NO_PERMISSION ->
-                    player.sendMessage(color("&cKamu tidak memiliki izin withdraw."));
+                    player.sendMessage(color(
+                            "&cKamu tidak memiliki izin withdraw."
+                    ));
 
             case DISABLED ->
-                    player.sendMessage(color("&cFitur bank sedang dinonaktifkan."));
+                    player.sendMessage(color(
+                            "&cFitur bank sedang dinonaktifkan."
+                    ));
 
             case DATABASE_ERROR ->
-                    player.sendMessage(color("&cTerjadi kesalahan database."));
+                    player.sendMessage(color(
+                            "&cTerjadi kesalahan database."
+                    ));
         }
     }
 

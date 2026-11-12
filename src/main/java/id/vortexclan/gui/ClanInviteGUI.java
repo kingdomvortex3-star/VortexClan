@@ -23,7 +23,6 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.UUID;
 
 public class ClanInviteGUI implements Listener {
 
@@ -66,7 +65,7 @@ public class ClanInviteGUI implements Listener {
             return;
         }
 
-        List<Player> targets = Bukkit.getOnlinePlayers()
+        List<? extends Player> targets = Bukkit.getOnlinePlayers()
                 .stream()
                 .filter(target -> !target.getUniqueId().equals(
                         player.getUniqueId()

@@ -21,6 +21,8 @@ import id.vortexclan.database.DatabaseManager;
 import id.vortexclan.economy.VaultManager;
 
 import id.vortexclan.gui.ClanAllianceGUI;
+import id.vortexclan.gui.ClanBankGUI;
+import id.vortexclan.gui.ClanBankTransactionGUI;
 import id.vortexclan.gui.ClanLeaderboardGUI;
 import id.vortexclan.gui.ClanWarGUI;
 import id.vortexclan.gui.ClanWarLeaderboardGUI;
@@ -64,11 +66,12 @@ public final class VortexClan extends JavaPlugin {
 
     private ClanLeaderboardGUI clanLeaderboardGUI;
     private ClanAllianceGUI clanAllianceGUI;
+    private ClanBankGUI clanBankGUI;
+    private ClanBankTransactionGUI clanBankTransactionGUI;
     private ClanWarGUI clanWarGUI;
     private ClanWarLeaderboardGUI clanWarLeaderboardGUI;
 
     private VortexClanExpansion placeholderExpansion;
-
     private BukkitTask taxTask;
 
     @Override
@@ -90,6 +93,7 @@ public final class VortexClan extends JavaPlugin {
             getLogger().info("Clan System: Enabled");
             getLogger().info("Clan Alliance: Enabled");
             getLogger().info("Clan War: Enabled");
+            getLogger().info("Clan Bank: Enabled");
             getLogger().info("Clan Leaderboard: Enabled");
             getLogger().info("PlaceholderAPI: "
                     + (placeholderExpansion != null
@@ -124,6 +128,10 @@ public final class VortexClan extends JavaPlugin {
 
         if (clanAllianceGUI != null) {
             clanAllianceGUI.clearWaitingInputs();
+        }
+
+        if (clanBankGUI != null) {
+            clanBankGUI.clearPendingInputs();
         }
 
         if (clanHomeManager != null) {
@@ -230,6 +238,10 @@ public final class VortexClan extends JavaPlugin {
                 clanAllianceManager
         );
 
+        clanBankGUI = new ClanBankGUI(this);
+
+        clanBankTransactionGUI = new ClanBankTransactionGUI(this);
+
         clanWarGUI = new ClanWarGUI(
                 this,
                 clanWarManager
@@ -272,6 +284,16 @@ public final class VortexClan extends JavaPlugin {
 
         Bukkit.getPluginManager().registerEvents(
                 clanAllianceGUI,
+                this
+        );
+
+        Bukkit.getPluginManager().registerEvents(
+                clanBankGUI,
+                this
+        );
+
+        Bukkit.getPluginManager().registerEvents(
+                clanBankTransactionGUI,
                 this
         );
 
@@ -442,6 +464,14 @@ public final class VortexClan extends JavaPlugin {
 
     public ClanAllianceGUI getClanAllianceGUI() {
         return clanAllianceGUI;
+    }
+
+    public ClanBankGUI getClanBankGUI() {
+        return clanBankGUI;
+    }
+
+    public ClanBankTransactionGUI getClanBankTransactionGUI() {
+        return clanBankTransactionGUI;
     }
 
     public ClanWarGUI getClanWarGUI() {
